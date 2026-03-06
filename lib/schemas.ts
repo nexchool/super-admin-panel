@@ -61,6 +61,16 @@ export const addTenantAdminSchema = z.object({
 });
 export type AddTenantAdminFormValues = z.infer<typeof addTenantAdminSchema>;
 
+export const notificationTemplateSchema = z.object({
+  subject: z.string().min(1, "Subject is required"),
+  body: z.string().min(1, "Body is required"),
+  tenantId: z.string().optional(),
+  category: z.string().min(1, "Category is required"),
+  channel: z.string().min(1, "Channel is required"),
+  type: z.string().min(1, "Type is required"),
+});
+export type NotificationTemplateFormValues = z.infer<typeof notificationTemplateSchema>;
+
 export const platformSettingsSchema = z.object({
   platform_name: z.string().optional(),
   default_plan_id: z.string().optional(),

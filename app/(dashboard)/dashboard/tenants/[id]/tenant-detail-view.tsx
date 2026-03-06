@@ -6,10 +6,12 @@ import {
   useTenant,
   usePlans,
   useTenantAdmins,
+  useTenantNotificationSettings,
   useInvalidateTenants,
   useInvalidateDashboard,
   useInvalidateTenant,
   useInvalidateTenantAdmins,
+  useInvalidateTenantNotificationSettings,
 } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +43,8 @@ import {
   type AddTenantAdminFormValues,
 } from "@/lib/schemas";
 import { api } from "@/lib/api";
-import { ArrowLeft, Pause, Play, KeyRound, Trash2, CreditCard, Pencil, UserPlus } from "lucide-react";
+import { ArrowLeft, Pause, Play, KeyRound, Trash2, CreditCard, Pencil, UserPlus, Mail, MessageSquare, Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useState } from "react";
 
 export function TenantDetailView({ id }: { id: string }) {
@@ -49,10 +52,12 @@ export function TenantDetailView({ id }: { id: string }) {
   const { data: tenant, isLoading, error } = useTenant(id);
   const { data: plans } = usePlans();
   const { data: admins, isLoading: adminsLoading } = useTenantAdmins(id);
+  const { data: notificationSettings, isLoading: notificationSettingsLoading } = useTenantNotificationSettings(id);
   const invalidateTenants = useInvalidateTenants();
   const invalidateDashboard = useInvalidateDashboard();
   const invalidateTenant = useInvalidateTenant(id);
   const invalidateTenantAdmins = useInvalidateTenantAdmins(id);
+  const invalidateNotificationSettings = useInvalidateTenantNotificationSettings(id);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [editTenantOpen, setEditTenantOpen] = useState(false);
   const [addAdminOpen, setAddAdminOpen] = useState(false);
@@ -184,6 +189,24 @@ export function TenantDetailView({ id }: { id: string }) {
     ? new Date(tenant.createdAt).toLocaleDateString()
     : "—";
 
+  const plan = plans?.find((p) => p.id === tenant.planId);
+  const notificationsEnabled = plan?.features?.notifications !== false;
+
+  const emailEnabled = notificationSettings?.email_enabled ?? false;
+  const smsEnabled = notificationSettings?.sms_enabled ?? false;
+  const inAppEnabled = notificationSettings?.in_app_enabled ?? false;
+
+  const handleChannelToggle = async (
+    payload: { email_enabled: boolean; sms_enabled: boolean; in_app_enabled: boolean }
+  ) => {
+    try {
+      await api.patch(`/api/platform/tenants/${id}/notification-settings`, payload);
+      await invalidateNotificationSettings();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="p-8">
       <div className="mb-8 flex items-center gap-4">
@@ -291,6 +314,84 @@ export function TenantDetailView({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {!notificationsEnabled ? (
+        <Card className="mt-6 rounded-xl">
+          <CardContent className="flex items-center gap-3 pt-6">
+            <Badge variant="warning">Notifications disabled in current plan</Badge>
+            <p className="text-sm text-muted-foreground">
+              Enable the Notifications feature in this tenant&apos;s plan to configure notification settings.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mt-6 rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Notification settings</CardTitle>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/dashboard/notification-templates?tenant_id=${id}`}>
+                Manage templates
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {notificationSettingsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Email enabled</span>
+                  </div>
+                  <Switch
+                    checked={emailEnabled}
+                    onCheckedChange={(checked) =>
+                      handleChannelToggle({
+                        email_enabled: checked,
+                        sms_enabled: smsEnabled,
+                        in_app_enabled: inAppEnabled,
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">SMS enabled</span>
+                  </div>
+                  <Switch
+                    checked={smsEnabled}
+                    onCheckedChange={(checked) =>
+                      handleChannelToggle({
+                        email_enabled: emailEnabled,
+                        sms_enabled: checked,
+                        in_app_enabled: inAppEnabled,
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bell className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">In-App enabled</span>
+                  </div>
+                  <Switch
+                    checked={inAppEnabled}
+                    onCheckedChange={(checked) =>
+                      handleChannelToggle({
+                        email_enabled: emailEnabled,
+                        sms_enabled: smsEnabled,
+                        in_app_enabled: checked,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-6 rounded-xl">
         <CardHeader>

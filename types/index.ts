@@ -93,6 +93,45 @@ export interface CreateTenantPayload {
   adminEmail: string;
 }
 
+// --- Notification templates ---
+export interface NotificationTemplateItem {
+  id: string;
+  tenant_id: string | null;
+  type: string;
+  channel: string;
+  category: string;
+  is_system: boolean;
+  subject_template: string;
+  body_template: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PaginatedNotificationTemplatesResponse {
+  items: NotificationTemplateItem[];
+  pagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+  };
+}
+
+// --- Tenant notification settings (GET/PATCH) ---
+export interface TenantNotificationTemplate {
+  id: string;
+  type: string;
+  channel: string;
+  category: string;
+  subject_template: string;
+  body_template: string;
+}
+
+export interface TenantNotificationSettingsResponse {
+  tenant_id: string;
+  templates: TenantNotificationTemplate[];
+}
+
 // --- Auth ---
 export interface LoginPayload {
   email: string;
