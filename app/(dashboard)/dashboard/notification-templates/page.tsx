@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import {
   useNotificationTemplates,
   useInvalidateNotificationTemplates,
@@ -66,7 +65,17 @@ const NOTIFICATION_TYPES = [
 ].sort();
 const PER_PAGE = 50;
 
+// Next.js 16 requires useSearchParams to be inside a Suspense boundary.
+// Wrap the actual page content (which reads search params) in Suspense.
 export default function NotificationTemplatesPage() {
+  return (
+    <Suspense fallback={<div className="p-8">Loading notification templates…</div>}>
+      <NotificationTemplatesPageInner />
+    </Suspense>
+  );
+}
+
+function NotificationTemplatesPageInner() {
   const searchParams = useSearchParams();
   const tenantIdParam = searchParams.get("tenant_id") ?? undefined;
 
