@@ -58,6 +58,9 @@ export interface TenantDetail {
   contactEmail?: string;
   phone?: string;
   address?: string;
+  logoUrl?: string;
+  tagline?: string;
+  boardAffiliation?: string;
   adminName?: string;
   adminEmail?: string;
 }

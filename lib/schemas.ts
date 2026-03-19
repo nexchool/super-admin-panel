@@ -52,6 +52,9 @@ export const editTenantSchema = z.object({
   contactEmail: z.string().email("Invalid email"),
   phone: z.string().optional(),
   address: z.string().optional(),
+  logoUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  tagline: z.string().max(255).optional(),
+  boardAffiliation: z.string().max(100).optional(),
 });
 export type EditTenantFormValues = z.infer<typeof editTenantSchema>;
 

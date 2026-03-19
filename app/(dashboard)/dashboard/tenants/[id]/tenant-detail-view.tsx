@@ -86,8 +86,12 @@ export function TenantDetailView({ id }: { id: string }) {
       contactEmail: tenant?.contactEmail ?? "",
       phone: tenant?.phone ?? "",
       address: tenant?.address ?? "",
+      logoUrl: tenant?.logoUrl ?? "",
+      tagline: tenant?.tagline ?? "",
+      boardAffiliation: tenant?.boardAffiliation ?? "",
     },
   });
+
 
   const addAdminForm = useForm<AddTenantAdminFormValues>({
     resolver: zodResolver(addTenantAdminSchema),
@@ -160,6 +164,9 @@ export function TenantDetailView({ id }: { id: string }) {
         contact_email: values.contactEmail,
         phone: values.phone || null,
         address: values.address || null,
+        logo_url: values.logoUrl || null,
+        tagline: values.tagline || null,
+        board_affiliation: values.boardAffiliation || null,
       });
       toast.success("Tenant updated");
       setEditTenantOpen(false);
@@ -323,6 +330,28 @@ export function TenantDetailView({ id }: { id: string }) {
                 <p className="font-medium">{tenant.address}</p>
               </div>
             )}
+            {tenant.tagline && (
+              <div>
+                <p className="text-sm text-muted-foreground">Tagline</p>
+                <p className="font-medium">{tenant.tagline}</p>
+              </div>
+            )}
+            {tenant.boardAffiliation && (
+              <div>
+                <p className="text-sm text-muted-foreground">Board Affiliation</p>
+                <p className="font-medium">{tenant.boardAffiliation}</p>
+              </div>
+            )}
+            {tenant.logoUrl && (
+              <div>
+                <p className="text-sm text-muted-foreground">School Logo</p>
+                <img
+                  src={tenant.logoUrl}
+                  alt="School Logo"
+                  className="mt-1 h-12 w-12 rounded object-contain border border-border"
+                />
+              </div>
+            )}
             <div className="flex gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Students</p>
@@ -482,6 +511,9 @@ export function TenantDetailView({ id }: { id: string }) {
                 contactEmail: tenant.contactEmail ?? "",
                 phone: tenant.phone ?? "",
                 address: tenant.address ?? "",
+                logoUrl: tenant.logoUrl ?? "",
+                tagline: tenant.tagline ?? "",
+                boardAffiliation: tenant.boardAffiliation ?? "",
               });
               setEditTenantOpen(true);
             }}
@@ -593,6 +625,33 @@ export function TenantDetailView({ id }: { id: string }) {
             <div className="space-y-2">
               <Label>Address (optional)</Label>
               <Input {...editTenantForm.register("address")} />
+            </div>
+            <div className="space-y-2">
+              <Label>School Logo URL (optional)</Label>
+              <Input
+                {...editTenantForm.register("logoUrl")}
+                placeholder="https://res.cloudinary.com/..."
+              />
+              {editTenantForm.formState.errors.logoUrl && (
+                <p className="text-sm text-destructive">{editTenantForm.formState.errors.logoUrl.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Upload to Cloudinary and paste the URL here. Used on PDF receipts &amp; invoices.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>School Tagline (optional)</Label>
+              <Input
+                {...editTenantForm.register("tagline")}
+                placeholder="e.g. English Medium School For Girls"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Board Affiliation (optional)</Label>
+              <Input
+                {...editTenantForm.register("boardAffiliation")}
+                placeholder="e.g. CBSE, ICSE, Gujarat State Board"
+              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTenantOpen(false)}>Cancel</Button>
