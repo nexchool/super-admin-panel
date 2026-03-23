@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
+import { PANEL_BASE } from "@/lib/api";
 import {
   login as loginApi,
   logout as logoutApi,
@@ -43,7 +44,7 @@ export function useAuth() {
       await setPanelAuthCookie(token);
       queryClient.invalidateQueries({ queryKey: ["session"] });
       // Full page nav ensures cookie is sent and avoids RSC/prefetch issues
-      window.location.href = "/dashboard";
+      window.location.href = `${PANEL_BASE}/dashboard`;
     },
   });
 

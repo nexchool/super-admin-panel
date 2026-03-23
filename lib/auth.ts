@@ -4,7 +4,7 @@
  * When panel and API are on different domains, we also set a panel-domain cookie via /api/auth/set-cookie.
  */
 
-import { api } from "./api";
+import { api, PANEL_BASE } from "./api";
 import type { LoginPayload, LoginResponse } from "@/types";
 
 const AUTH_LOGIN_PATH = "/api/auth/login";
@@ -24,7 +24,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse & Logi
 
 /** Sets panel-domain cookie so middleware sees auth (required when panel and API are cross-origin) */
 export async function setPanelAuthCookie(accessToken: string): Promise<void> {
-  await fetch("/api/auth/set-cookie", {
+  await fetch(`${PANEL_BASE}/api/auth/set-cookie`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ access_token: accessToken }),
@@ -34,7 +34,7 @@ export async function setPanelAuthCookie(accessToken: string): Promise<void> {
 
 /** Clears panel-domain auth cookie on logout */
 export async function clearPanelAuthCookie(): Promise<void> {
-  await fetch("/api/auth/clear-cookie", {
+  await fetch(`${PANEL_BASE}/api/auth/clear-cookie`, {
     method: "POST",
     credentials: "include",
   });

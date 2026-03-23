@@ -1,3 +1,6 @@
+/** Keep in sync with `basePath` in next.config.ts */
+export const PANEL_BASE = "/panel";
+
 /**
  * Centralized API client.
  * - Sends Authorization header with token from cookie (cross-origin backend doesn't receive cookies).
@@ -7,11 +10,48 @@
  */
 
 const isDev = process.env.NODE_ENV === "development";
-const API_BASE =
+const apiBaseFromEnv =
   (isDev ? process.env.NEXT_PUBLIC_API_URL_DEV : process.env.NEXT_PUBLIC_API_URL) ??
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.NEXT_PUBLIC_API_URL_DEV ??
   "";
+
+/**
+ * Where the Flask API lives in the browser.
+ * - Empty = same-origin `/api/*` (works when the page is served from nginx, e.g. :8080).
+ * - If you open Next directly on :3000 or :3001, `/api/*` would hit Next (HTML 404) — use gateway.
+ */
+/** 401 on these routes is “wrong password”, not “session expired”. */
+function isPublicAuthRequestUrl(fullUrl: string): boolean {
+  let path = fullUrl;
+  try {
+    path = new URL(fullUrl, "http://localhost").pathname;
+  } catch {
+    path = (fullUrl.split("?")[0] ?? "").replace(/^https?:\/\/[^/]+/, "");
+  }
+  return (
+    path.includes("/api/auth/login") ||
+    path.includes("/api/auth/register") ||
+    path.includes("/api/auth/password/forgot") ||
+    path.includes("/api/auth/password/reset")
+  );
+}
+
+function getApiBase(): string {
+  if (typeof window !== "undefined" && apiBaseFromEnv.startsWith("http://api:")) {
+    return "";
+  }
+  if (apiBaseFromEnv) return apiBaseFromEnv.replace(/\/$/, "");
+  if (typeof window === "undefined") return "";
+
+  const port = window.location.port;
+  const directNextPort = port === "3000" || port === "3001";
+  if (!directNextPort) return "";
+
+  const gw = (process.env.NEXT_PUBLIC_GATEWAY_ORIGIN ?? "").trim().replace(/\/$/, "");
+  if (gw) return gw;
+  return `${window.location.protocol}//${window.location.hostname}:8080`;
+}
 
 /** Reads auth token from panel cookie (readable for cross-origin API calls) */
 function getAuthToken(): string | null {
@@ -43,11 +83,27 @@ export function getErrorMessage(e: unknown): string {
   return "Something went wrong";
 }
 
+function extractApiErrorMessage(body: unknown, statusText: string): string {
+  if (typeof body === "object" && body !== null) {
+    const o = body as Record<string, unknown>;
+    if (typeof o.message === "string" && o.message.trim()) return o.message;
+    if (typeof o.error === "string" && o.error.trim()) return o.error;
+  }
+  if (typeof body === "string" && body.trim()) {
+    const t = body.trim();
+    if (t.startsWith("<!DOCTYPE") || t.toLowerCase().startsWith("<html")) {
+      return "Server returned a web page instead of JSON — check the API URL.";
+    }
+    return t.length > 280 ? `${t.slice(0, 280)}…` : t;
+  }
+  return statusText || "Request failed";
+}
+
 export async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const fullUrl = url.startsWith("http") ? url : `${API_BASE}${url}`;
+  const fullUrl = url.startsWith("http") ? url : `${getApiBase()}${url}`;
 
   const token = getAuthToken();
   const headers: Record<string, string> = {
@@ -58,33 +114,54 @@ export async function apiRequest<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(fullUrl, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(fullUrl, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const network =
+      msg === "Failed to fetch" ||
+      msg === "Load failed" ||
+      msg.includes("NetworkError when attempting to fetch");
+    throw new ApiError(
+      network
+        ? "Cannot reach the server. Use nginx (e.g. http://localhost:8080/panel/) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
+        : `Network error: ${msg}`,
+      0
+    );
+  }
 
-  if (res.status === 401) {
-    if (typeof window !== "undefined") {
-      // Clear panel cookie first to break redirect loop (middleware won't redirect back to dashboard)
-      await fetch("/api/auth/clear-cookie", { method: "POST", credentials: "include" }).catch(() => {});
-      window.location.href = "/login";
-    }
-    throw new ApiError("Unauthorized", 401);
+  // Session expired: redirect — but NOT for login/register (401 = bad password).
+  if (res.status === 401 && typeof window !== "undefined" && !isPublicAuthRequestUrl(fullUrl)) {
+    await fetch(`${PANEL_BASE}/api/auth/clear-cookie`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {});
+    window.location.href = `${PANEL_BASE}/login`;
+    throw new ApiError("Your session has expired. Please sign in again.", 401);
   }
 
   if (!res.ok) {
-    let body: unknown;
+    const raw = await res.text();
+    let body: unknown = raw;
     try {
-      body = await res.json();
+      if (raw.trim()) body = JSON.parse(raw) as unknown;
     } catch {
-      body = await res.text();
+      /* keep as string */
     }
-    throw new ApiError(
-      (body as { message?: string })?.message ?? res.statusText,
-      res.status,
-      body
-    );
+    let message = extractApiErrorMessage(body, res.statusText);
+    const rawStr = typeof body === "string" ? body : "";
+    if (
+      rawStr &&
+      (rawStr.trimStart().startsWith("<!DOCTYPE") || rawStr.trimStart().startsWith("<html"))
+    ) {
+      message = `API returned HTML (${res.status}) instead of JSON — open the panel via nginx or set NEXT_PUBLIC_GATEWAY_ORIGIN.`;
+    }
+    throw new ApiError(message, res.status, body);
   }
 
   const contentType = res.headers.get("content-type");
