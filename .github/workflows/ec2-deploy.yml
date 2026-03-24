@@ -29,14 +29,25 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Build and push multi-arch image
         id: image
         run: |
           IMAGE_URI="${ECR_REPO}:${GITHUB_SHA}"
-          docker build --build-arg NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL_PROD }}" -t "$IMAGE_URI" .
-          docker tag "$IMAGE_URI" "${ECR_REPO}:latest"
-          docker push "$IMAGE_URI"
-          docker push "${ECR_REPO}:latest"
+
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t "$IMAGE_URI" \
+            -t "${ECR_REPO}:latest" \
+            --push .
+
           REGISTRY=$(echo "$ECR_REPO" | cut -d'/' -f1)
           echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
 
