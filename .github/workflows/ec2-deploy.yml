@@ -43,6 +43,7 @@ jobs:
           IMAGE_URI="${ECR_REPO}:${GITHUB_SHA}"
 
           docker buildx build \
+            --no-cache \
             --platform linux/amd64,linux/arm64 \
             --build-arg NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL_PROD }}" \
             -t "$IMAGE_URI" \
