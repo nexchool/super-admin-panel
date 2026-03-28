@@ -18,7 +18,7 @@ const apiBaseFromEnv =
 
 /**
  * Where the Flask API lives in the browser.
- * - Empty = same-origin `/api/*` (works when the page is served from nginx, e.g. :8080).
+ * - Empty = same-origin `/api/*` (works when the page is served from nginx, e.g. :80).
  * - If you open Next directly on :3000 or :3001, `/api/*` would hit Next (HTML 404) — use gateway.
  */
 /** 401 on these routes is “wrong password”, not “session expired”. */
@@ -50,7 +50,7 @@ function getApiBase(): string {
 
   const gw = (process.env.NEXT_PUBLIC_GATEWAY_ORIGIN ?? "").trim().replace(/\/$/, "");
   if (gw) return gw;
-  return `${window.location.protocol}//${window.location.hostname}:8080`;
+  return `${window.location.protocol}//${window.location.hostname}:80`;
 }
 
 /** Reads auth token from panel cookie (readable for cross-origin API calls) */
@@ -129,7 +129,7 @@ export async function apiRequest<T>(
       msg.includes("NetworkError when attempting to fetch");
     throw new ApiError(
       network
-        ? "Cannot reach the server. Use nginx (e.g. http://localhost:8080/panel/) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
+        ? "Cannot reach the server. Use nginx (e.g. http://localhost:80/panel/) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
         : `Network error: ${msg}`,
       0
     );
