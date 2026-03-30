@@ -1,6 +1,3 @@
-/** Keep in sync with `basePath` in next.config.ts */
-export const PANEL_BASE = "/panel";
-
 /**
  * Centralized API client.
  * - Sends Authorization header with token from cookie (cross-origin backend doesn't receive cookies).
@@ -129,7 +126,7 @@ export async function apiRequest<T>(
       msg.includes("NetworkError when attempting to fetch");
     throw new ApiError(
       network
-        ? "Cannot reach the server. Use nginx (e.g. http://localhost:80/panel/) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
+        ? "Cannot reach the server. Use nginx (same host as the app or your API domain) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
         : `Network error: ${msg}`,
       0
     );
@@ -137,11 +134,11 @@ export async function apiRequest<T>(
 
   // Session expired: redirect — but NOT for login/register (401 = bad password).
   if (res.status === 401 && typeof window !== "undefined" && !isPublicAuthRequestUrl(fullUrl)) {
-    await fetch(`${PANEL_BASE}/api/auth/clear-cookie`, {
+    await fetch("/api/auth/clear-cookie", {
       method: "POST",
       credentials: "include",
     }).catch(() => {});
-    window.location.href = `${PANEL_BASE}/login`;
+    window.location.href = "/login";
     throw new ApiError("Your session has expired. Please sign in again.", 401);
   }
 
@@ -159,7 +156,7 @@ export async function apiRequest<T>(
       rawStr &&
       (rawStr.trimStart().startsWith("<!DOCTYPE") || rawStr.trimStart().startsWith("<html"))
     ) {
-      message = `API returned HTML (${res.status}) instead of JSON — open the panel via nginx or set NEXT_PUBLIC_GATEWAY_ORIGIN.`;
+      message = `API returned HTML (${res.status}) instead of JSON — check NEXT_PUBLIC_API_URL / nginx routing.`;
     }
     throw new ApiError(message, res.status, body);
   }
