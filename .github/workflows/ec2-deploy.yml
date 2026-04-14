@@ -46,6 +46,8 @@ jobs:
             --no-cache \
             --platform linux/amd64,linux/arm64 \
             --build-arg NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL_PROD }}" \
+            --build-arg NEXT_PUBLIC_PANEL_URL="${{ secrets.NEXT_PUBLIC_PANEL_URL_PROD }}" \
+            --build-arg NEXT_PUBLIC_GATEWAY_ORIGIN="${{ secrets.NEXT_PUBLIC_GATEWAY_ORIGIN_PROD }}" \
             -t "$IMAGE_URI" \
             -t "${ECR_REPO}:latest" \
             --push .
