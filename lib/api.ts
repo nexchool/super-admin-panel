@@ -124,9 +124,12 @@ export async function apiRequest<T>(
       msg === "Failed to fetch" ||
       msg === "Load failed" ||
       msg.includes("NetworkError when attempting to fetch");
+    const isDev = process.env.NODE_ENV === "development";
     throw new ApiError(
       network
-        ? "Cannot reach the server. Use nginx (same host as the app or your API domain) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
+        ? isDev
+          ? "Cannot reach the API. Use your gateway (same host as the app) or check NEXT_PUBLIC_GATEWAY_ORIGIN."
+          : "We could not reach the server. Check your connection and try again, or contact support if it continues."
         : `Network error: ${msg}`,
       0
     );
