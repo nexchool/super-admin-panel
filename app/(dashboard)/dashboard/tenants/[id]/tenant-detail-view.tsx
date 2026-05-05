@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   useTenant,
-  usePlans,
   useTenantAdmins,
+  useTenantBilling,
   useTenantNotificationSettings,
+  useFeatureCatalog,
   useInvalidateTenants,
   useInvalidateDashboard,
   useInvalidateTenant,
   useInvalidateTenantAdmins,
+  useInvalidateTenantBilling,
   useInvalidateTenantNotificationSettings,
 } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
@@ -23,30 +25,35 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  changePlanSchema,
   editTenantSchema,
+  tenantPricingSchema,
   addTenantAdminSchema,
   updateTenantAdminSchema,
-  type ChangePlanFormValues,
   type EditTenantFormValues,
+  type TenantPricingFormValues,
   type AddTenantAdminFormValues,
   type UpdateTenantAdminFormValues,
 } from "@/lib/schemas";
 import { api, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
-import { ArrowLeft, Pause, Play, KeyRound, Trash2, CreditCard, Pencil, UserPlus, Mail, MessageSquare, Bell, MoreHorizontal } from "lucide-react";
+import {
+  ArrowLeft,
+  Pause,
+  Play,
+  KeyRound,
+  Trash2,
+  Pencil,
+  UserPlus,
+  Mail,
+  MessageSquare,
+  Bell,
+  MoreHorizontal,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,30 +61,33 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const formatCurrency = (n: number, currency = "INR") =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 2 }).format(n);
 
 export function TenantDetailView({ id }: { id: string }) {
   const router = useRouter();
   const { data: tenant, isLoading, error } = useTenant(id);
-  const { data: plans } = usePlans();
   const { data: admins, isLoading: adminsLoading } = useTenantAdmins(id);
-  const { data: notificationSettings, isLoading: notificationSettingsLoading } = useTenantNotificationSettings(id);
+  const { data: billing, isLoading: billingLoading } = useTenantBilling(id);
+  const { data: catalog } = useFeatureCatalog();
+  const { data: notificationSettings, isLoading: notificationSettingsLoading } =
+    useTenantNotificationSettings(id);
+
   const invalidateTenants = useInvalidateTenants();
   const invalidateDashboard = useInvalidateDashboard();
   const invalidateTenant = useInvalidateTenant(id);
   const invalidateTenantAdmins = useInvalidateTenantAdmins(id);
+  const invalidateBilling = useInvalidateTenantBilling(id);
   const invalidateNotificationSettings = useInvalidateTenantNotificationSettings(id);
-  const [changePlanOpen, setChangePlanOpen] = useState(false);
+
   const [editTenantOpen, setEditTenantOpen] = useState(false);
+  const [editPricingOpen, setEditPricingOpen] = useState(false);
   const [addAdminOpen, setAddAdminOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<{ id: string; email: string; name?: string } | null>(null);
   const [adminToRemove, setAdminToRemove] = useState<{ id: string; email: string; name?: string } | null>(null);
-
-  const changePlanForm = useForm<ChangePlanFormValues>({
-    resolver: zodResolver(changePlanSchema),
-    defaultValues: { planId: tenant?.planId ?? "" },
-  });
 
   const editTenantForm = useForm<EditTenantFormValues>({
     resolver: zodResolver(editTenantSchema),
@@ -92,6 +102,28 @@ export function TenantDetailView({ id }: { id: string }) {
     },
   });
 
+  const pricingForm = useForm<TenantPricingFormValues>({
+    resolver: zodResolver(tenantPricingSchema),
+    defaultValues: {
+      pricePerStudentPerYear: "",
+      discountPercentage: "",
+      discountStartDate: "",
+      discountEndDate: "",
+    },
+  });
+
+  useEffect(() => {
+    if (tenant && editPricingOpen) {
+      pricingForm.reset({
+        pricePerStudentPerYear:
+          tenant.pricePerStudentPerYear != null ? String(tenant.pricePerStudentPerYear) : "",
+        discountPercentage:
+          tenant.discountPercentage != null ? String(tenant.discountPercentage) : "",
+        discountStartDate: tenant.discountStartDate ?? "",
+        discountEndDate: tenant.discountEndDate ?? "",
+      });
+    }
+  }, [tenant, editPricingOpen, pricingForm]);
 
   const addAdminForm = useForm<AddTenantAdminFormValues>({
     resolver: zodResolver(addTenantAdminSchema),
@@ -102,20 +134,6 @@ export function TenantDetailView({ id }: { id: string }) {
     resolver: zodResolver(updateTenantAdminSchema),
     defaultValues: { email: "", name: "" },
   });
-
-
-  const handleChangePlan = async (values: ChangePlanFormValues) => {
-    try {
-      await api.patch(`/api/platform/tenants/${id}/change-plan`, { plan_id: values.planId });
-      toast.success("Plan updated");
-      changePlanForm.reset({ planId: values.planId });
-      setChangePlanOpen(false);
-      await invalidateTenant();
-      await invalidateTenants();
-    } catch (e) {
-      toast.error(getErrorMessage(e));
-    }
-  };
 
   const handleSuspendActivate = async () => {
     if (!tenant) return;
@@ -138,7 +156,6 @@ export function TenantDetailView({ id }: { id: string }) {
     try {
       await api.post(`/api/platform/tenants/${id}/reset-admin`);
       toast.success("Admin password reset link sent");
-      await invalidateTenant();
     } catch (e) {
       toast.error(getErrorMessage(e));
     }
@@ -172,6 +189,43 @@ export function TenantDetailView({ id }: { id: string }) {
       setEditTenantOpen(false);
       await invalidateTenant();
       await invalidateTenants();
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  };
+
+  const handleSavePricing = async (values: TenantPricingFormValues) => {
+    try {
+      await api.patch(`/api/platform/tenants/${id}/pricing`, {
+        price_per_student_per_year:
+          values.pricePerStudentPerYear === "" || values.pricePerStudentPerYear == null
+            ? ""
+            : Number(values.pricePerStudentPerYear),
+        discount_percentage:
+          values.discountPercentage === "" || values.discountPercentage == null
+            ? ""
+            : Number(values.discountPercentage),
+        discount_start_date: values.discountStartDate ?? "",
+        discount_end_date: values.discountEndDate ?? "",
+      });
+      toast.success("Pricing updated");
+      setEditPricingOpen(false);
+      await invalidateTenant();
+      await invalidateBilling();
+      await invalidateTenants();
+      await invalidateDashboard();
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  };
+
+  const handleToggleFeature = async (featureKey: string, enabled: boolean) => {
+    try {
+      await api.patch(`/api/platform/tenants/${id}/features`, {
+        flags: { [featureKey]: enabled },
+      });
+      toast.success(`${featureKey.replace(/_/g, " ")} ${enabled ? "enabled" : "disabled"}`);
+      await invalidateTenant();
     } catch (e) {
       toast.error(getErrorMessage(e));
     }
@@ -241,12 +295,10 @@ export function TenantDetailView({ id }: { id: string }) {
     );
   }
 
-  const createdDate = tenant.createdAt
-    ? new Date(tenant.createdAt).toLocaleDateString()
-    : "—";
-
-  const plan = plans?.find((p) => p.id === tenant.planId);
-  const notificationsEnabled = plan?.features?.notifications !== false;
+  const createdDate = tenant.createdAt ? new Date(tenant.createdAt).toLocaleDateString() : "—";
+  const notificationsEnabled = tenant.featureFlags?.notifications !== false;
+  const optionalFeatures = (catalog ?? []).filter((f) => f.toggleable);
+  const coreFeatures = (catalog ?? []).filter((f) => !f.toggleable);
 
   const emailEnabled = notificationSettings?.email_enabled ?? false;
   const smsEnabled = notificationSettings?.sms_enabled ?? false;
@@ -274,12 +326,47 @@ export function TenantDetailView({ id }: { id: string }) {
           </Link>
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight">{tenant.name}</h1>
+        <Badge
+          variant={
+            tenant.status === "active"
+              ? "success"
+              : tenant.status === "trial"
+              ? "secondary"
+              : "destructive"
+          }
+        >
+          {tenant.status}
+        </Badge>
+        {tenant.status === "trial" && tenant.trialEndsAt ? (
+          <span className="text-sm text-muted-foreground">
+            Trial ends {new Date(tenant.trialEndsAt).toLocaleDateString()}
+          </span>
+        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="rounded-xl">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Basic info</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                editTenantForm.reset({
+                  name: tenant.name,
+                  contactEmail: tenant.contactEmail ?? "",
+                  phone: tenant.phone ?? "",
+                  address: tenant.address ?? "",
+                  logoUrl: tenant.logoUrl ?? "",
+                  tagline: tenant.tagline ?? "",
+                  boardAffiliation: tenant.boardAffiliation ?? "",
+                });
+                setEditTenantOpen(true);
+              }}
+            >
+              <Pencil className="mr-2 size-4" />
+              Edit
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -287,31 +374,9 @@ export function TenantDetailView({ id }: { id: string }) {
               <p className="font-medium">{tenant.subdomain}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Plan</p>
-              <p className="font-medium">{tenant.plan}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Status</p>
-              <Badge
-                variant={
-                  tenant.status === "active" ? "success" : "destructive"
-                }
-              >
-                {tenant.status}
-              </Badge>
-            </div>
-            <div>
               <p className="text-sm text-muted-foreground">Created</p>
               <p className="font-medium">{createdDate}</p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-xl">
-          <CardHeader>
-            <CardTitle>Contact &amp; counts</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
             {tenant.contactEmail && (
               <div>
                 <p className="text-sm text-muted-foreground">Contact Email</p>
@@ -330,28 +395,6 @@ export function TenantDetailView({ id }: { id: string }) {
                 <p className="font-medium">{tenant.address}</p>
               </div>
             )}
-            {tenant.tagline && (
-              <div>
-                <p className="text-sm text-muted-foreground">Tagline</p>
-                <p className="font-medium">{tenant.tagline}</p>
-              </div>
-            )}
-            {tenant.boardAffiliation && (
-              <div>
-                <p className="text-sm text-muted-foreground">Board Affiliation</p>
-                <p className="font-medium">{tenant.boardAffiliation}</p>
-              </div>
-            )}
-            {tenant.logoUrl && (
-              <div>
-                <p className="text-sm text-muted-foreground">School Logo</p>
-                <img
-                  src={tenant.logoUrl}
-                  alt="School Logo"
-                  className="mt-1 h-12 w-12 rounded object-contain border border-border"
-                />
-              </div>
-            )}
             <div className="flex gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Students</p>
@@ -364,7 +407,127 @@ export function TenantDetailView({ id }: { id: string }) {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="rounded-xl">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Pricing</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setEditPricingOpen(true)}>
+              <Pencil className="mr-2 size-4" />
+              Edit
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Price per student / year</p>
+              <p className="font-medium">
+                {tenant.pricePerStudentPerYear != null
+                  ? formatCurrency(tenant.pricePerStudentPerYear)
+                  : "Not set"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Discount</p>
+              <p className="font-medium">
+                {tenant.discountPercentage != null && tenant.discountPercentage > 0
+                  ? `${tenant.discountPercentage}%`
+                  : "None"}
+              </p>
+            </div>
+            {(tenant.discountStartDate || tenant.discountEndDate) && (
+              <div>
+                <p className="text-sm text-muted-foreground">Discount window</p>
+                <p className="font-medium">
+                  {tenant.discountStartDate ?? "—"} → {tenant.discountEndDate ?? "—"}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      <Card className="mt-6 rounded-xl">
+        <CardHeader>
+          <CardTitle>Billing (this year)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {billingLoading ? (
+            <div className="h-24 animate-pulse rounded bg-muted" />
+          ) : !billing ? (
+            <p className="text-sm text-muted-foreground">Set a price to see billing.</p>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Active students</p>
+                <p className="text-2xl font-semibold">{billing.activeStudents}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Base ({formatCurrency(billing.pricePerStudentPerYear, billing.currency)} × {billing.activeStudents})</p>
+                <p className="text-2xl font-semibold">{formatCurrency(billing.baseAmount, billing.currency)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total{billing.discountActive ? ` (after ${billing.discountPercentage}% discount)` : ""}</p>
+                <p className="text-2xl font-semibold">{formatCurrency(billing.total, billing.currency)}</p>
+                {billing.discountActive && (
+                  <p className="text-xs text-muted-foreground">
+                    Saved {formatCurrency(billing.discountAmount, billing.currency)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 rounded-xl">
+        <CardHeader>
+          <CardTitle>Features</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Toggle modules for this school. Disabled features hide from the school&apos;s UI and reject related API calls.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {optionalFeatures.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Loading features…</p>
+          ) : (
+            <>
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Optional (toggleable)
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {optionalFeatures.map((feat) => {
+                    const enabled = tenant.featureFlags?.[feat.key] !== false;
+                    return (
+                      <label
+                        key={feat.key}
+                        className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                      >
+                        <span className="text-sm font-medium">{feat.label}</span>
+                        <Switch
+                          checked={enabled}
+                          onCheckedChange={(v) => handleToggleFeature(feat.key, v)}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              {coreFeatures.length > 0 && (
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Core (always on)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {coreFeatures.map((feat) => (
+                      <Badge key={feat.key} variant="secondary">{feat.label}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-6 rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">
@@ -423,9 +586,9 @@ export function TenantDetailView({ id }: { id: string }) {
       {!notificationsEnabled ? (
         <Card className="mt-6 rounded-xl">
           <CardContent className="flex items-center gap-3 pt-6">
-            <Badge variant="warning">Notifications disabled in current plan</Badge>
+            <Badge variant="warning">Notifications feature disabled</Badge>
             <p className="text-sm text-muted-foreground">
-              Enable the Notifications feature in this tenant&apos;s plan to configure notification settings.
+              Enable the Notifications feature above to configure channels for this tenant.
             </p>
           </CardContent>
         </Card>
@@ -503,34 +666,6 @@ export function TenantDetailView({ id }: { id: string }) {
           <CardTitle>Actions</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Button
-            variant="outline"
-            onClick={() => {
-              editTenantForm.reset({
-                name: tenant.name,
-                contactEmail: tenant.contactEmail ?? "",
-                phone: tenant.phone ?? "",
-                address: tenant.address ?? "",
-                logoUrl: tenant.logoUrl ?? "",
-                tagline: tenant.tagline ?? "",
-                boardAffiliation: tenant.boardAffiliation ?? "",
-              });
-              setEditTenantOpen(true);
-            }}
-          >
-            <Pencil className="mr-2 size-4" />
-            Edit tenant
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              changePlanForm.setValue("planId", tenant.planId);
-              setChangePlanOpen(true);
-            }}
-          >
-            <CreditCard className="mr-2 size-4" />
-            Change Plan
-          </Button>
           <Button variant="outline" onClick={handleSuspendActivate}>
             {tenant.status === "active" ? (
               <>
@@ -548,51 +683,68 @@ export function TenantDetailView({ id }: { id: string }) {
             <KeyRound className="mr-2 size-4" />
             Reset Admin
           </Button>
-          <Button
-            variant="destructive"
-            onClick={() => setDeleteConfirmOpen(true)}
-          >
+          <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)}>
             <Trash2 className="mr-2 size-4" />
             Delete (soft)
           </Button>
         </CardContent>
       </Card>
 
-      <Dialog open={changePlanOpen} onOpenChange={setChangePlanOpen}>
+      <Dialog open={editPricingOpen} onOpenChange={setEditPricingOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change plan</DialogTitle>
+            <DialogTitle>Edit pricing</DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={changePlanForm.handleSubmit(handleChangePlan)}
-            className="space-y-4"
-          >
+          <form onSubmit={pricingForm.handleSubmit(handleSavePricing)} className="space-y-4">
             <div className="space-y-2">
-              <Select
-                value={changePlanForm.watch("planId")}
-                onValueChange={(v) => changePlanForm.setValue("planId", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(plans) ? plans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </SelectItem>
-                  )) : null}
-                </SelectContent>
-              </Select>
+              <Label>Price per student / year (₹)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                {...pricingForm.register("pricePerStudentPerYear")}
+              />
+              {pricingForm.formState.errors.pricePerStudentPerYear && (
+                <p className="text-sm text-destructive">
+                  {pricingForm.formState.errors.pricePerStudentPerYear.message}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Discount %</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                {...pricingForm.register("discountPercentage")}
+              />
+              {pricingForm.formState.errors.discountPercentage && (
+                <p className="text-sm text-destructive">
+                  {pricingForm.formState.errors.discountPercentage.message}
+                </p>
+              )}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Discount start</Label>
+                <Input type="date" {...pricingForm.register("discountStartDate")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Discount end</Label>
+                <Input type="date" {...pricingForm.register("discountEndDate")} />
+                {pricingForm.formState.errors.discountEndDate && (
+                  <p className="text-sm text-destructive">
+                    {pricingForm.formState.errors.discountEndDate.message}
+                  </p>
+                )}
+              </div>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setChangePlanOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setEditPricingOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Update plan</Button>
+              <Button type="submit">Save</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -746,10 +898,7 @@ export function TenantDetailView({ id }: { id: string }) {
             backend if needed.
           </p>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteConfirmOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleDelete}>

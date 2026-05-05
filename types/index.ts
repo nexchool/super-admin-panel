@@ -11,6 +11,7 @@ export interface DashboardMetrics {
   totalStudents: number;
   totalTeachers: number;
   monthlyRevenue: number;
+  yearlyRevenue: number;
 }
 
 export interface TenantGrowthByMonth {
@@ -24,13 +25,14 @@ export interface DashboardResponse {
 }
 
 // --- Tenants (GET /platform/tenants) ---
-export type TenantStatus = "active" | "suspended";
+export type TenantStatus = "trial" | "active" | "suspended" | "deleted";
 
 export interface TenantListItem {
   id: string;
   name: string;
   subdomain: string;
-  plan: string;
+  pricePerStudentPerYear: number | null;
+  discountPercentage: number | null;
   studentsCount: number;
   teachersCount: number;
   status: TenantStatus;
@@ -49,8 +51,6 @@ export interface TenantDetail {
   id: string;
   name: string;
   subdomain: string;
-  plan: string;
-  planId: string;
   status: TenantStatus;
   studentsCount: number;
   teachersCount: number;
@@ -61,28 +61,37 @@ export interface TenantDetail {
   logoUrl?: string;
   tagline?: string;
   boardAffiliation?: string;
-  adminName?: string;
-  adminEmail?: string;
+  pricePerStudentPerYear: number | null;
+  discountPercentage: number | null;
+  discountStartDate: string | null;
+  discountEndDate: string | null;
+  trialEndsAt: string | null;
+  billingCycle: string;
+  featureFlags: Record<string, boolean>;
 }
 
-// --- Plan features (GET /platform/plan-features) ---
-export interface PlanFeatureOption {
+// --- Feature catalog (GET /platform/feature-catalog) ---
+export interface FeatureCatalogItem {
   key: string;
   label: string;
+  category: "core" | "optional";
+  toggleable: boolean;
 }
 
-// --- Plans (GET /platform/plans) — read-only ---
-export interface Plan {
-  id: string;
-  name: string;
-  price: number;
-  maxStudents: number;
-  maxTeachers: number;
-  /** Plan feature flags: feature_key -> enabled. Used for plan config toggles. */
-  features?: Record<string, boolean>;
+// --- Tenant billing (GET /platform/tenants/[id]/billing) ---
+export interface TenantBilling {
+  tenantId: string;
+  onDate: string;
+  activeStudents: number;
+  pricePerStudentPerYear: number;
+  baseAmount: number;
+  discountPercentage: number;
+  discountActive: boolean;
+  discountWindow: { start: string | null; end: string | null };
+  discountAmount: number;
+  total: number;
+  currency: string;
 }
-
-export type PlanListResponse = Plan[];
 
 // --- Create tenant (POST /platform/tenants) ---
 export interface CreateTenantPayload {
@@ -91,9 +100,13 @@ export interface CreateTenantPayload {
   contactEmail: string;
   phone?: string;
   address?: string;
-  planId: string;
   adminName: string;
   adminEmail: string;
+  pricePerStudentPerYear?: number;
+  discountPercentage?: number;
+  discountStartDate?: string;
+  discountEndDate?: string;
+  featureFlags?: Record<string, boolean>;
 }
 
 // --- Notification templates ---

@@ -17,20 +17,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Eye, Pause, Play, CreditCard, KeyRound } from "lucide-react";
+import { MoreHorizontal, Eye, Pause, Play, KeyRound } from "lucide-react";
 import type { TenantListItem } from "@/types";
 
 interface TenantsTableProps {
   data: TenantListItem[];
   onSuspendActivate?: (tenant: TenantListItem) => void;
-  onChangePlan?: (tenant: TenantListItem) => void;
   onResetAdmin?: (tenant: TenantListItem) => void;
 }
+
+const formatPrice = (n: number | null) =>
+  n != null
+    ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n)
+    : "—";
 
 export function TenantsTable({
   data,
   onSuspendActivate,
-  onChangePlan,
   onResetAdmin,
 }: TenantsTableProps) {
   return (
@@ -39,7 +42,7 @@ export function TenantsTable({
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Subdomain</TableHead>
-          <TableHead>Plan</TableHead>
+          <TableHead className="text-right">Price / student / yr</TableHead>
           <TableHead className="text-right">Students</TableHead>
           <TableHead className="text-right">Teachers</TableHead>
           <TableHead>Status</TableHead>
@@ -53,13 +56,16 @@ export function TenantsTable({
             <TableCell className="text-muted-foreground">
               {tenant.subdomain}
             </TableCell>
-            <TableCell>{tenant.plan}</TableCell>
             <TableCell className="text-right">
-              {tenant.studentsCount}
+              {formatPrice(tenant.pricePerStudentPerYear)}
+              {tenant.discountPercentage != null && tenant.discountPercentage > 0 && (
+                <span className="ml-1 text-xs text-muted-foreground">
+                  −{tenant.discountPercentage}%
+                </span>
+              )}
             </TableCell>
-            <TableCell className="text-right">
-              {tenant.teachersCount}
-            </TableCell>
+            <TableCell className="text-right">{tenant.studentsCount}</TableCell>
+            <TableCell className="text-right">{tenant.teachersCount}</TableCell>
             <TableCell>
               <Badge
                 variant={
@@ -85,9 +91,7 @@ export function TenantsTable({
                     </Link>
                   </DropdownMenuItem>
                   {onSuspendActivate && (
-                    <DropdownMenuItem
-                      onClick={() => onSuspendActivate(tenant)}
-                    >
+                    <DropdownMenuItem onClick={() => onSuspendActivate(tenant)}>
                       {tenant.status === "active" ? (
                         <>
                           <Pause className="mr-2 size-4" />
@@ -99,12 +103,6 @@ export function TenantsTable({
                           Activate
                         </>
                       )}
-                    </DropdownMenuItem>
-                  )}
-                  {onChangePlan && (
-                    <DropdownMenuItem onClick={() => onChangePlan(tenant)}>
-                      <CreditCard className="mr-2 size-4" />
-                      Change Plan
                     </DropdownMenuItem>
                   )}
                   {onResetAdmin && (

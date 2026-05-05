@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
-  CreditCard,
   Settings,
   LogOut,
   FileText,
@@ -18,7 +17,6 @@ import { useAuth } from "@/hooks/useAuth";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/tenants", label: "Tenants", icon: Building2 },
-  { href: "/dashboard/plans", label: "Plans", icon: CreditCard },
   { href: "/dashboard/notification-templates", label: "Notification templates", icon: Mail },
   { href: "/dashboard/audit", label: "Audit logs", icon: FileText },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },

@@ -7,6 +7,39 @@ export const loginSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
 
+/**
+ * HTML <input> always yields strings, even for type="number"/"date". We
+ * keep these as `z.string().optional()` to stay aligned with the form's
+ * input type, and validate format with `.refine`. Empty string = unset.
+ */
+const optionalNonNegativeNumberString = z
+  .string()
+  .optional()
+  .refine(
+    (v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 0),
+    "Must be ≥ 0"
+  );
+
+const optionalDate = z
+  .string()
+  .optional()
+  .refine(
+    (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v),
+    "Use YYYY-MM-DD"
+  );
+
+const optionalDiscountString = z
+  .string()
+  .optional()
+  .refine(
+    (v) => {
+      if (!v) return true;
+      const n = Number(v);
+      return !Number.isNaN(n) && n >= 0 && n <= 100;
+    },
+    "Must be between 0 and 100"
+  );
+
 export const createTenantSchema = z.object({
   name: z.string().min(1, "Name is required"),
   subdomain: z
@@ -16,36 +49,16 @@ export const createTenantSchema = z.object({
   contactEmail: z.string().email("Invalid email"),
   phone: z.string().optional(),
   address: z.string().optional(),
-  planId: z.string().min(1, "Plan is required"),
   adminName: z.string().min(1, "Admin name is required"),
   adminEmail: z.string().email("Invalid admin email"),
+  pricePerStudentPerYear: optionalNonNegativeNumberString,
+  discountPercentage: optionalDiscountString,
+  discountStartDate: optionalDate,
+  discountEndDate: optionalDate,
+  featureFlags: z.record(z.string(), z.boolean()).optional(),
 });
 
 export type CreateTenantFormValues = z.infer<typeof createTenantSchema>;
-
-export const changePlanSchema = z.object({
-  planId: z.string().min(1, "Plan is required"),
-});
-
-export type ChangePlanFormValues = z.infer<typeof changePlanSchema>;
-
-export const createPlanSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  priceMonthly: z.coerce.number().min(0, "Price must be ≥ 0"),
-  maxStudents: z.coerce.number().int().min(0, "Must be ≥ 0"),
-  maxTeachers: z.coerce.number().int().min(0, "Must be ≥ 0"),
-  features: z.record(z.string(), z.boolean()).optional(),
-});
-export type CreatePlanFormValues = {
-  name: string;
-  priceMonthly: number;
-  maxStudents: number;
-  maxTeachers: number;
-  features?: Record<string, boolean>;
-};
-
-export const editPlanSchema = createPlanSchema;
-export type EditPlanFormValues = CreatePlanFormValues;
 
 export const editTenantSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -57,6 +70,25 @@ export const editTenantSchema = z.object({
   boardAffiliation: z.string().max(100).optional(),
 });
 export type EditTenantFormValues = z.infer<typeof editTenantSchema>;
+
+export const tenantPricingSchema = z
+  .object({
+    pricePerStudentPerYear: optionalNonNegativeNumberString,
+    discountPercentage: optionalDiscountString,
+    discountStartDate: optionalDate,
+    discountEndDate: optionalDate,
+  })
+  .refine(
+    (data) => {
+      if (!data.discountStartDate || !data.discountEndDate) return true;
+      return data.discountStartDate <= data.discountEndDate;
+    },
+    {
+      message: "Start date must be on or before end date",
+      path: ["discountEndDate"],
+    }
+  );
+export type TenantPricingFormValues = z.infer<typeof tenantPricingSchema>;
 
 export const addTenantAdminSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -82,7 +114,6 @@ export type NotificationTemplateFormValues = z.infer<typeof notificationTemplate
 
 export const platformSettingsSchema = z.object({
   platform_name: z.string().optional(),
-  default_plan_id: z.string().optional(),
   maintenance_mode: z.enum(["true", "false"]).optional(),
   session_timeout_minutes: z.string().optional(),
   max_login_attempts: z.string().optional(),

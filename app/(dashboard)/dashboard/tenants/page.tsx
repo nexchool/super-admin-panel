@@ -36,10 +36,6 @@ export default function TenantsPage() {
     }
   };
 
-  const handleChangePlan = (_tenant: TenantListItem) => {
-    window.location.href = `/dashboard/tenants/${_tenant.id}?action=change-plan`;
-  };
-
   const handleResetAdmin = async (tenant: TenantListItem) => {
     try {
       await api.post(`/api/platform/tenants/${tenant.id}/reset-admin`);
@@ -87,7 +83,6 @@ export default function TenantsPage() {
               <TenantsTable
                 data={tenants}
                 onSuspendActivate={handleSuspendActivate}
-                onChangePlan={handleChangePlan}
                 onResetAdmin={handleResetAdmin}
               />
               <Pagination

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePlatformSettings, useInvalidateSettings, usePlans } from "@/hooks/useApi";
+import { usePlatformSettings, useInvalidateSettings } from "@/hooks/useApi";
 import {
   Card,
   CardContent,
@@ -24,7 +24,6 @@ import { useState } from "react";
 
 const SETTING_KEYS = [
   "platform_name",
-  "default_plan_id",
   "maintenance_mode",
   "session_timeout_minutes",
   "max_login_attempts",
@@ -32,12 +31,8 @@ const SETTING_KEYS = [
   "support_email",
 ] as const;
 
-/** Sentinel for "no plan" in Select (Radix does not allow value="") */
-const DEFAULT_PLAN_NONE = "__none__";
-
 export default function SettingsPage() {
   const { data: settings, isLoading, error } = usePlatformSettings();
-  const { data: plans } = usePlans();
   const invalidateSettings = useInvalidateSettings();
   const [saving, setSaving] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -66,8 +61,6 @@ export default function SettingsPage() {
         const v = formValues[key];
         if (key === "maintenance_mode") {
           payload[key] = v === "true" ? "true" : "false";
-        } else if (key === "default_plan_id" && (v === "" || v === DEFAULT_PLAN_NONE)) {
-          payload[key] = null;
         } else if (v === "" || v == null) {
           payload[key] = null;
         } else {
@@ -125,28 +118,6 @@ export default function SettingsPage() {
                 placeholder="e.g. School ERP"
               />
               <p className="text-xs text-muted-foreground">Display name for the platform (e.g. in emails or branding).</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="default_plan_id">Default plan for new tenants</Label>
-              <Select
-                value={formValues.default_plan_id || DEFAULT_PLAN_NONE}
-                onValueChange={(v) => handleChange("default_plan_id", v === DEFAULT_PLAN_NONE ? "" : v)}
-              >
-                <SelectTrigger id="default_plan_id">
-                  <SelectValue placeholder="Select a plan (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={DEFAULT_PLAN_NONE}>None</SelectItem>
-                  {Array.isArray(plans) &&
-                    plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">When creating a new tenant, this plan can be pre-selected.</p>
             </div>
 
             <div className="space-y-2">

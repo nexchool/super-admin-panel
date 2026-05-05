@@ -37,8 +37,8 @@ const metricCards: Array<{
   { key: "totalStudents", label: "Total Students", icon: GraduationCap },
   { key: "totalTeachers", label: "Total Teachers", icon: Users },
   {
-    key: "monthlyRevenue",
-    label: "Monthly Revenue",
+    key: "yearlyRevenue",
+    label: "Yearly Revenue",
     icon: DollarSign,
     format: (v: number) =>
       new Intl.NumberFormat("en-IN", {

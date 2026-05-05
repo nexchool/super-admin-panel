@@ -6,32 +6,36 @@ import type {
   DashboardResponse,
   PaginatedTenantsResponse,
   TenantDetail,
-  PlanListResponse,
-  PlanFeatureOption,
+  FeatureCatalogItem,
+  TenantBilling,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
 const TENANTS_KEY = (page: number, limit: number) =>
   ["platform", "tenants", page, limit];
 const TENANT_KEY = (id: string) => ["platform", "tenant", id];
-const PLANS_KEY = ["platform", "plans"];
-const PLAN_FEATURES_KEY = ["platform", "plan-features"];
+const FEATURE_CATALOG_KEY = ["platform", "feature-catalog"];
+const TENANT_BILLING_KEY = (tenantId: string) => ["platform", "tenant", tenantId, "billing"];
 
-/** Reduces refetch storms when navigating; data stays fresh for 2 min */
 const STALE_TIME = 2 * 60 * 1000;
 
-export function usePlanFeatures() {
+export function useFeatureCatalog() {
   return useQuery({
-    queryKey: PLAN_FEATURES_KEY,
-    staleTime: STALE_TIME,
+    queryKey: FEATURE_CATALOG_KEY,
+    staleTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const res = await api.get<{ data?: unknown }>("/api/platform/plan-features");
+      const res = await api.get<{ data?: unknown }>("/api/platform/feature-catalog");
       const list = Array.isArray(res?.data) ? res.data : [];
-      return list.map((f: { key?: string; label?: string }) => ({
-        key: String(f.key ?? ""),
-        label: String(f.label ?? f.key ?? ""),
-      })) as PlanFeatureOption[];
+      return list.map((f: unknown) => {
+        const r = f as Record<string, unknown>;
+        return {
+          key: String(r.key ?? ""),
+          label: String(r.label ?? r.key ?? ""),
+          category: (r.category === "core" ? "core" : "optional") as "core" | "optional",
+          toggleable: Boolean(r.toggleable),
+        };
+      }) as FeatureCatalogItem[];
     },
   });
 }
@@ -54,6 +58,7 @@ export function useDashboard() {
           totalStudents: Number(d.total_students ?? 0),
           totalTeachers: Number(d.total_teachers ?? 0),
           monthlyRevenue: Number(d.revenue_monthly ?? 0),
+          yearlyRevenue: Number(d.revenue_yearly ?? 0),
         },
         tenantGrowthByMonth: Array.isArray(d.tenant_growth_by_month)
           ? (d.tenant_growth_by_month as Array<{ month?: string; count?: number }>).map(
@@ -86,7 +91,12 @@ export function useTenants(page: number, limit: number) {
           id: String(r.id ?? ""),
           name: String(r.name ?? ""),
           subdomain: String(r.subdomain ?? ""),
-          plan: String(r.plan_name ?? r.plan ?? ""),
+          pricePerStudentPerYear:
+            r.price_per_student_per_year != null
+              ? Number(r.price_per_student_per_year)
+              : null,
+          discountPercentage:
+            r.discount_percentage != null ? Number(r.discount_percentage) : null,
           studentsCount: Number(r.student_count ?? r.studentsCount ?? 0),
           teachersCount: Number(r.teacher_count ?? r.teachersCount ?? 0),
           status: (r.status as "active" | "suspended") || "active",
@@ -111,6 +121,15 @@ export function useTenant(id: string | null) {
     queryFn: async () => {
       const res = await api.get<{ success?: boolean; data?: unknown }>(`/api/platform/tenants/${id}`);
       const r = (res?.data ?? {}) as Record<string, unknown>;
+      const featureFlagsRaw = r.feature_flags;
+      const featureFlags =
+        featureFlagsRaw && typeof featureFlagsRaw === "object" && !Array.isArray(featureFlagsRaw)
+          ? (featureFlagsRaw as Record<string, boolean>)
+          : {};
+      const statusRaw = typeof r.status === "string" ? r.status : "active";
+      const status = (
+        ["trial", "active", "suspended", "deleted"].includes(statusRaw) ? statusRaw : "active"
+      ) as TenantDetail["status"];
       return {
         id: String(r.id ?? ""),
         name: String(r.name ?? ""),
@@ -121,41 +140,53 @@ export function useTenant(id: string | null) {
         logoUrl: typeof r.logo_url === "string" ? r.logo_url : undefined,
         tagline: typeof r.tagline === "string" ? r.tagline : undefined,
         boardAffiliation: typeof r.board_affiliation === "string" ? r.board_affiliation : undefined,
-        plan: String(r.plan_name ?? r.plan ?? ""),
-        planId: String(r.plan_id ?? r.planId ?? ""),
-        status: (r.status as "active" | "suspended") || "active",
+        status,
         studentsCount: Number(r.student_count ?? r.studentsCount ?? 0),
         teachersCount: Number(r.teacher_count ?? r.teachersCount ?? 0),
-        createdAt: typeof r.created_at === "string" ? r.created_at : typeof r.createdAt === "string" ? r.createdAt : "",
+        createdAt: typeof r.created_at === "string" ? r.created_at : "",
+        pricePerStudentPerYear:
+          r.price_per_student_per_year != null ? Number(r.price_per_student_per_year) : null,
+        discountPercentage:
+          r.discount_percentage != null ? Number(r.discount_percentage) : null,
+        discountStartDate: typeof r.discount_start_date === "string" ? r.discount_start_date : null,
+        discountEndDate: typeof r.discount_end_date === "string" ? r.discount_end_date : null,
+        trialEndsAt: typeof r.trial_ends_at === "string" ? r.trial_ends_at : null,
+        billingCycle: typeof r.billing_cycle === "string" ? r.billing_cycle : "yearly",
+        featureFlags,
       } as TenantDetail;
     },
     enabled: !!id,
   });
 }
 
-export function usePlans() {
+export function useTenantBilling(tenantId: string | null) {
   return useQuery({
-    queryKey: PLANS_KEY,
-    staleTime: STALE_TIME,
+    queryKey: TENANT_BILLING_KEY(tenantId ?? ""),
+    staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
+    enabled: !!tenantId,
     queryFn: async () => {
-      const res = await api.get<{ data?: unknown }>("/api/platform/plans");
-      const list = Array.isArray(res?.data) ? res.data : [];
-      return list.map((p: Record<string, unknown>) => {
-        const rawFeatures = p.features_json ?? p.features;
-        const features =
-          rawFeatures && typeof rawFeatures === "object" && !Array.isArray(rawFeatures)
-            ? (rawFeatures as Record<string, boolean>)
-            : undefined;
-        return {
-          id: String(p.id ?? ""),
-          name: String(p.name ?? ""),
-          price: Number(p.price ?? p.price_monthly ?? 0),
-          maxStudents: Number(p.maxStudents ?? p.max_students ?? 0),
-          maxTeachers: Number(p.maxTeachers ?? p.max_teachers ?? 0),
-          features,
-        };
-      }) as PlanListResponse;
+      const res = await api.get<{ data?: Record<string, unknown> }>(
+        `/api/platform/tenants/${tenantId}/billing`
+      );
+      const d = res?.data ?? {};
+      const window = (d.discount_window ?? {}) as Record<string, unknown>;
+      return {
+        tenantId: String(d.tenant_id ?? tenantId ?? ""),
+        onDate: String(d.on_date ?? ""),
+        activeStudents: Number(d.active_students ?? 0),
+        pricePerStudentPerYear: Number(d.price_per_student_per_year ?? 0),
+        baseAmount: Number(d.base_amount ?? 0),
+        discountPercentage: Number(d.discount_percentage ?? 0),
+        discountActive: Boolean(d.discount_active),
+        discountWindow: {
+          start: typeof window.start === "string" ? window.start : null,
+          end: typeof window.end === "string" ? window.end : null,
+        },
+        discountAmount: Number(d.discount_amount ?? 0),
+        total: Number(d.total ?? 0),
+        currency: String(d.currency ?? "INR"),
+      } as TenantBilling;
     },
   });
 }
@@ -172,14 +203,15 @@ export function useInvalidateTenant(id: string | null) {
     queryClient.invalidateQueries({ queryKey: TENANT_KEY(id ?? "") });
 }
 
+export function useInvalidateTenantBilling(id: string | null) {
+  const queryClient = useQueryClient();
+  return () =>
+    queryClient.invalidateQueries({ queryKey: TENANT_BILLING_KEY(id ?? "") });
+}
+
 export function useInvalidateDashboard() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: DASHBOARD_KEY });
-}
-
-export function useInvalidatePlans() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: PLANS_KEY });
 }
 
 const AUDIT_LOGS_KEY = (page: number, perPage: number, filters: Record<string, string>) =>
