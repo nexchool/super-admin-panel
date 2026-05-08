@@ -67,4 +67,5 @@ if [ -n "$ARCH_SUFFIX" ]; then
   fi
 fi
 
-exec npm run dev -- --hostname 0.0.0.0 --port 3000
+# Use webpack dev server: Turbopack can panic in Docker (bind mounts + HMR).
+exec npm run dev -- --webpack --hostname 0.0.0.0 --port 3000
