@@ -11,8 +11,8 @@ import type {
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
-const TENANTS_KEY = (page: number, limit: number) =>
-  ["platform", "tenants", page, limit];
+const TENANTS_KEY = (page: number, limit: number, search: string) =>
+  ["platform", "tenants", page, limit, search];
 const TENANT_KEY = (id: string) => ["platform", "tenant", id];
 const FEATURE_CATALOG_KEY = ["platform", "feature-catalog"];
 const TENANT_BILLING_KEY = (tenantId: string) => ["platform", "tenant", tenantId, "billing"];
@@ -73,15 +73,20 @@ export function useDashboard() {
   });
 }
 
-export function useTenants(page: number, limit: number) {
+export function useTenants(page: number, limit: number, search = "") {
   return useQuery({
-    queryKey: TENANTS_KEY(page, limit),
+    queryKey: TENANTS_KEY(page, limit, search),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: false,
     queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(limit),
+      });
+      if (search) params.set("search", search);
       const res = await api.get<{
         data?: { items?: unknown[]; pagination?: { page?: number; per_page?: number; total?: number; pages?: number } };
-      }>(`/api/platform/tenants?page=${page}&per_page=${limit}`);
+      }>(`/api/platform/tenants?${params.toString()}`);
       const inner = res?.data;
       const items = Array.isArray(inner?.items) ? inner.items : [];
       const pagination = inner?.pagination ?? {};

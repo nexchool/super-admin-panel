@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTenants, useInvalidateTenants, useInvalidateDashboard } from "@/hooks/useApi";
 import { TenantsTable } from "@/components/tables/tenants-table";
 import { Pagination } from "@/components/tables/pagination";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { CreateTenantModal } from "@/components/forms/create-tenant-modal";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import type { TenantListItem } from "@/types";
 import { api, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
@@ -17,7 +18,20 @@ const LIMIT = 10;
 export default function TenantsPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const { data, isLoading, error } = useTenants(page, LIMIT);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce the search box and jump back to page 1 whenever the term changes —
+  // otherwise a search from page 20 looks empty.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data, isLoading, error } = useTenants(page, LIMIT, debouncedSearch);
   const invalidateTenants = useInvalidateTenants();
   const invalidateDashboard = useInvalidateDashboard();
 
@@ -70,13 +84,28 @@ export default function TenantsPage() {
       </div>
 
       <Card className="rounded-xl">
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>All tenants</CardTitle>
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, subdomain, or email…"
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex justify-center py-12 text-muted-foreground">
               Loading…
+            </div>
+          ) : tenants.length === 0 ? (
+            <div className="flex justify-center py-12 text-muted-foreground">
+              {debouncedSearch
+                ? `No tenants match "${debouncedSearch}".`
+                : "No tenants yet."}
             </div>
           ) : (
             <>
