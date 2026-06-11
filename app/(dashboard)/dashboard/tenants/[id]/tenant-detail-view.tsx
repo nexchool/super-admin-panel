@@ -85,6 +85,11 @@ export function TenantDetailView({ id }: { id: string }) {
   const [editTenantOpen, setEditTenantOpen] = useState(false);
   const [editPricingOpen, setEditPricingOpen] = useState(false);
   const [addAdminOpen, setAddAdminOpen] = useState(false);
+  // One-time credential reveal after creating an admin (cleared on dialog close).
+  const [revealedAdminCreds, setRevealedAdminCreds] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<{ id: string; email: string; name?: string } | null>(null);
   const [adminToRemove, setAdminToRemove] = useState<{ id: string; email: string; name?: string } | null>(null);
@@ -233,14 +238,23 @@ export function TenantDetailView({ id }: { id: string }) {
 
   const handleAddAdmin = async (values: AddTenantAdminFormValues) => {
     try {
-      await api.post(`/api/platform/tenants/${id}/admins`, {
+      const res = await api.post<{
+        data?: { admin_user_id?: string; temp_password?: string };
+      }>(`/api/platform/tenants/${id}/admins`, {
         email: values.email,
         name: values.name,
       });
-      toast.success("Admin added. Credentials will be sent by email.");
       setAddAdminOpen(false);
       addAdminForm.reset({ email: "", name: "" });
       await invalidateTenantAdmins();
+      const tempPassword = res?.data?.temp_password;
+      if (tempPassword) {
+        // One-time reveal: email delivery can be unavailable (SES sandbox), so
+        // the super admin can hand the credentials over directly.
+        setRevealedAdminCreds({ email: values.email, password: tempPassword });
+      } else {
+        toast.success("Admin added. Credentials will be sent by email.");
+      }
     } catch (e) {
       toast.error(getErrorMessage(e));
     }
@@ -841,6 +855,54 @@ export function TenantDetailView({ id }: { id: string }) {
               <Button type="submit">Add admin</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!revealedAdminCreds}
+        onOpenChange={(open) => !open && setRevealedAdminCreds(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Admin created — share these credentials</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This temporary password is shown only once. Share it with the new
+              admin now — they must change it at first login. A copy is also
+              emailed when email delivery is configured.
+            </p>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input readOnly value={revealedAdminCreds?.email ?? ""} />
+            </div>
+            <div className="space-y-2">
+              <Label>Temporary password</Label>
+              <Input
+                readOnly
+                className="font-mono"
+                value={revealedAdminCreds?.password ?? ""}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                if (!revealedAdminCreds) return;
+                await navigator.clipboard.writeText(
+                  `Email: ${revealedAdminCreds.email}\nTemporary password: ${revealedAdminCreds.password}`
+                );
+                toast.success("Credentials copied");
+              }}
+            >
+              Copy credentials
+            </Button>
+            <Button type="button" onClick={() => setRevealedAdminCreds(null)}>
+              Done
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
