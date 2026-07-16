@@ -53,7 +53,9 @@ import {
   MessageSquare,
   Bell,
   MoreHorizontal,
+  ExternalLink,
 } from "lucide-react";
+import { OnboardingSection } from "./onboarding-section";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -91,6 +93,7 @@ export function TenantDetailView({ id }: { id: string }) {
     password: string;
   } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [openingAdminWeb, setOpeningAdminWeb] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<{ id: string; email: string; name?: string } | null>(null);
   const [adminToRemove, setAdminToRemove] = useState<{ id: string; email: string; name?: string } | null>(null);
 
@@ -163,6 +166,23 @@ export function TenantDetailView({ id }: { id: string }) {
       toast.success("Admin password reset link sent");
     } catch (e) {
       toast.error(getErrorMessage(e));
+    }
+  };
+
+  const handleOpenAdminWeb = async () => {
+    setOpeningAdminWeb(true);
+    try {
+      const res = await api.post<{ data: { url: string } }>(
+        `/api/platform/tenants/${id}/login-link`
+      );
+      const url = res?.data?.url;
+      if (!url) throw new Error("No login link was returned.");
+      // One-time, single-use, ~90s code — open immediately in a new tab.
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setOpeningAdminWeb(false);
     }
   };
 
@@ -356,6 +376,17 @@ export function TenantDetailView({ id }: { id: string }) {
             Trial ends {new Date(tenant.trialEndsAt).toLocaleDateString()}
           </span>
         ) : null}
+        {tenant.status === "active" ? (
+          <Button
+            variant="outline"
+            className="ml-auto gap-2"
+            onClick={handleOpenAdminWeb}
+            disabled={openingAdminWeb}
+          >
+            <ExternalLink className="size-4" />
+            {openingAdminWeb ? "Opening…" : "Open admin-web"}
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -542,6 +573,16 @@ export function TenantDetailView({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      <OnboardingSection
+        tenantId={id}
+        tenantStatus={tenant.status}
+        onApplied={() => {
+          invalidateTenant();
+          invalidateTenants();
+          invalidateDashboard();
+        }}
+      />
 
       <Card className="mt-6 rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">

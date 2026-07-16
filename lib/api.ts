@@ -107,6 +107,10 @@ export async function apiRequest<T>(
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
+  // For multipart uploads let the browser set Content-Type (with the boundary).
+  if (options.body instanceof FormData) {
+    delete headers["Content-Type"];
+  }
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -180,4 +184,6 @@ export const api = {
   patch: <T>(url: string, data?: unknown) =>
     apiRequest<T>(url, { method: "PATCH", body: data ? JSON.stringify(data) : undefined }),
   delete: <T>(url: string) => apiRequest<T>(url, { method: "DELETE" }),
+  postForm: <T>(url: string, formData: FormData) =>
+    apiRequest<T>(url, { method: "POST", body: formData }),
 };
