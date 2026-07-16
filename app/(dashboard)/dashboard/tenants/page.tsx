@@ -60,6 +60,19 @@ export default function TenantsPage() {
     }
   };
 
+  const handleOpenAdminWeb = async (tenant: TenantListItem) => {
+    try {
+      const res = await api.post<{ data: { url: string } }>(
+        `/api/platform/tenants/${tenant.id}/login-link`
+      );
+      const url = res?.data?.url;
+      if (!url) throw new Error("No login link was returned.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  };
+
   if (error) {
     return (
       <div className="p-8">
@@ -113,6 +126,7 @@ export default function TenantsPage() {
                 data={tenants}
                 onSuspendActivate={handleSuspendActivate}
                 onResetAdmin={handleResetAdmin}
+                onOpenAdminWeb={handleOpenAdminWeb}
               />
               <Pagination
                 page={page}

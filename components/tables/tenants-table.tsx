@@ -17,13 +17,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Eye, Pause, Play, KeyRound } from "lucide-react";
+import { MoreHorizontal, Eye, Pause, Play, KeyRound, ExternalLink } from "lucide-react";
 import type { TenantListItem } from "@/types";
 
 interface TenantsTableProps {
   data: TenantListItem[];
   onSuspendActivate?: (tenant: TenantListItem) => void;
   onResetAdmin?: (tenant: TenantListItem) => void;
+  onOpenAdminWeb?: (tenant: TenantListItem) => void;
 }
 
 const formatPrice = (n: number | null) =>
@@ -35,6 +36,7 @@ export function TenantsTable({
   data,
   onSuspendActivate,
   onResetAdmin,
+  onOpenAdminWeb,
 }: TenantsTableProps) {
   return (
     <Table>
@@ -90,6 +92,12 @@ export function TenantsTable({
                       View
                     </Link>
                   </DropdownMenuItem>
+                  {onOpenAdminWeb && tenant.status === "active" && (
+                    <DropdownMenuItem onClick={() => onOpenAdminWeb(tenant)}>
+                      <ExternalLink className="mr-2 size-4" />
+                      Open admin-web
+                    </DropdownMenuItem>
+                  )}
                   {onSuspendActivate && (
                     <DropdownMenuItem onClick={() => onSuspendActivate(tenant)}>
                       {tenant.status === "active" ? (
