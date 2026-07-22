@@ -18,7 +18,9 @@ import { BranchesSection } from "./sections/branches-section";
 import { ProgrammesSection } from "./sections/programmes-section";
 import { GradesSection } from "./sections/grades-section";
 import { ClassesSection } from "./sections/classes-section";
+import { SubjectsPreviewSection } from "./sections/subjects-preview-section";
 import { ExtraSubjectsSection } from "./sections/extra-subjects-section";
+import { ReviewSection } from "./sections/review-section";
 
 /**
  * Single source of default values for the onboarding form. Valid-shaped (so
@@ -49,7 +51,7 @@ type OnboardingFormValues = z.input<typeof onboardingConfigSchema>;
  * checker before handing the value to the save mutation, which is typed against
  * the fully-resolved `OnboardingConfig`.
  */
-function withDefaults(values: OnboardingFormValues): OnboardingConfig {
+export function withDefaults(values: OnboardingFormValues): OnboardingConfig {
   return {
     ...values,
     academic_year: { ...values.academic_year, active: values.academic_year.active ?? true },
@@ -69,9 +71,9 @@ interface SectionStubSpec {
 }
 
 // Dependency order from the plan's section map. Titles/subtitles here are the
-// single source of truth for section headings — Task 2 rendered real inputs
-// for every entry except "Subjects (derived)" (index 5, still a `SectionStub`
-// below); Task 3 replaces that one and adds Review.
+// single source of truth for section headings — every entry (1-7) below
+// renders a real input/preview component; "Review & apply" isn't numbered so
+// it isn't in this array — its heading is passed to `ReviewSection` directly.
 const SECTION_STUBS: SectionStubSpec[] = [
   {
     title: "1. Academic year & terms",
@@ -105,18 +107,6 @@ const SECTION_STUBS: SectionStubSpec[] = [
       "For anything the board doesn't prescribe — pre-primary, or a school-specific subject.",
   },
 ];
-
-function SectionStub({ title, subtitle }: SectionStubSpec) {
-  return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
-      <p className="text-sm text-muted-foreground">{subtitle}</p>
-      <p className="text-xs italic text-muted-foreground">Coming soon.</p>
-    </section>
-  );
-}
 
 interface OnboardingFormProps {
   tenantId: string;
@@ -243,17 +233,13 @@ export function OnboardingForm({ tenantId }: OnboardingFormProps) {
             <ProgrammesSection {...SECTION_STUBS[2]} />
             <GradesSection {...SECTION_STUBS[3]} />
             <ClassesSection {...SECTION_STUBS[4]} />
-            <SectionStub key={SECTION_STUBS[5].title} {...SECTION_STUBS[5]} />
+            <SubjectsPreviewSection {...SECTION_STUBS[5]} />
             <ExtraSubjectsSection {...SECTION_STUBS[6]} />
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Review &amp; apply
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Check the configuration and apply once everything above looks right.
-              </p>
-              <p className="text-xs italic text-muted-foreground">Coming soon.</p>
-            </section>
+            <ReviewSection
+              title="Review & apply"
+              subtitle="Check the configuration and apply once everything above looks right."
+              tenantId={tenantId}
+            />
           </CardContent>
         </Card>
       </FormProvider>
