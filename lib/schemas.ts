@@ -121,3 +121,70 @@ export const platformSettingsSchema = z.object({
   support_email: z.string().email("Invalid email").optional().or(z.literal("")),
 });
 export type PlatformSettingsFormValues = z.infer<typeof platformSettingsSchema>;
+
+// Onboarding config. Field names are the server's, not camelCase, because this
+// object is posted verbatim to /seed/preview and /seed/apply.
+//
+// There is deliberately no `subjects` or `offerings` here: the server derives
+// both from each programme's template_board_code. A draft that carried them
+// could seed a stale catalogue, and the server rejects any config that declares
+// them.
+export const onboardingProgrammeSchema = z.object({
+  code: z.string().min(1, "Programme code is required"),
+  name: z.string().min(1, "Programme name is required"),
+  board: z.string().min(1, "Board is required"),
+  medium: z.string().optional(),
+  template_board_code: z.string().min(1, "Pick a curriculum template"),
+});
+
+export const onboardingTermSchema = z.object({
+  name: z.string().min(1, "Term name is required"),
+  code: z.string().optional(),
+  sequence: z.number().int().min(1),
+  start: z.string().min(1, "Start date is required"),
+  end: z.string().min(1, "End date is required"),
+});
+
+export const onboardingClassSchema = z.object({
+  unit: z.string().min(1),
+  programme: z.string().min(1),
+  grade: z.string().min(1),
+  sections: z.array(z.string().min(1)).min(1, "At least one section"),
+});
+
+export const onboardingExtraSubjectSchema = z.object({
+  code: z.string().min(1),
+  name: z.string().min(1),
+  programme: z.string().min(1),
+  grades: z.array(z.string().min(1)).min(1),
+  weekly: z.number().int().min(1).default(1),
+  type: z.enum(["mandatory", "elective"]).default("elective"),
+});
+
+export const onboardingConfigSchema = z.object({
+  academic_year: z.object({
+    name: z.string().min(1, "Academic year name is required"),
+    start: z.string().min(1, "Start date is required"),
+    end: z.string().min(1, "End date is required"),
+    active: z.boolean().default(true),
+  }),
+  terms: z.array(onboardingTermSchema).default([]),
+  units: z
+    .array(
+      z.object({
+        code: z.string().min(1, "Branch code is required"),
+        name: z.string().min(1, "Branch name is required"),
+      })
+    )
+    .min(1, "At least one branch"),
+  programmes: z.array(onboardingProgrammeSchema).min(1, "At least one programme"),
+  grades: z
+    .array(z.object({ name: z.string().min(1), sequence: z.number().int().min(1) }))
+    .min(1, "At least one grade"),
+  classes: z.array(onboardingClassSchema).default([]),
+  extra_subjects: z.array(onboardingExtraSubjectSchema).default([]),
+});
+
+export type OnboardingConfig = z.infer<typeof onboardingConfigSchema>;
+export type OnboardingTerm = z.infer<typeof onboardingTermSchema>;
+export type OnboardingClass = z.infer<typeof onboardingClassSchema>;
