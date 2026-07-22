@@ -13,6 +13,12 @@ import { useDebouncedAutosave } from "@/hooks/useDebouncedAutosave";
 import { useTenant } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AcademicYearSection } from "./sections/academic-year-section";
+import { BranchesSection } from "./sections/branches-section";
+import { ProgrammesSection } from "./sections/programmes-section";
+import { GradesSection } from "./sections/grades-section";
+import { ClassesSection } from "./sections/classes-section";
+import { ExtraSubjectsSection } from "./sections/extra-subjects-section";
 
 /**
  * Single source of default values for the onboarding form. Valid-shaped (so
@@ -62,8 +68,10 @@ interface SectionStubSpec {
   subtitle: string;
 }
 
-// Dependency order from the plan's section map. Task 2 replaces the first six
-// with real inputs; Task 3 replaces "Subjects (derived)" and adds Review.
+// Dependency order from the plan's section map. Titles/subtitles here are the
+// single source of truth for section headings — Task 2 rendered real inputs
+// for every entry except "Subjects (derived)" (index 5, still a `SectionStub`
+// below); Task 3 replaces that one and adds Review.
 const SECTION_STUBS: SectionStubSpec[] = [
   {
     title: "1. Academic year & terms",
@@ -230,9 +238,13 @@ export function OnboardingForm({ tenantId }: OnboardingFormProps) {
             </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-8">
-            {SECTION_STUBS.map((s) => (
-              <SectionStub key={s.title} {...s} />
-            ))}
+            <AcademicYearSection {...SECTION_STUBS[0]} />
+            <BranchesSection {...SECTION_STUBS[1]} />
+            <ProgrammesSection {...SECTION_STUBS[2]} />
+            <GradesSection {...SECTION_STUBS[3]} />
+            <ClassesSection {...SECTION_STUBS[4]} />
+            <SectionStub key={SECTION_STUBS[5].title} {...SECTION_STUBS[5]} />
+            <ExtraSubjectsSection {...SECTION_STUBS[6]} />
             <section className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Review &amp; apply
