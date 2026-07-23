@@ -44,6 +44,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html,
+body {
+  /* Stop the root viewport from elastic-bouncing when a scroll reaches the end
+     of an inner container and chains up to the page — that bounce shifts the
+     whole layout up and reveals empty space past the content. */
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
