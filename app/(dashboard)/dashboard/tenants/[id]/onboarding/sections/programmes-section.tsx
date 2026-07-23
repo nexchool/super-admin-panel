@@ -91,7 +91,8 @@ function ProgrammeRow({ index, templates, templatesLoading, onRemove }: Programm
   const rowErrors = errors.programmes?.[index];
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-5">
+    <div className="space-y-3 rounded-lg border border-border p-3">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <div className="space-y-2">
         <Label htmlFor={`programmes.${index}.code`}>Code</Label>
         <Input id={`programmes.${index}.code`} {...register(`programmes.${index}.code` as const)} />
@@ -144,10 +145,17 @@ function ProgrammeRow({ index, templates, templatesLoading, onRemove }: Programm
           <p className="text-sm text-destructive">{rowErrors.template_board_code.message}</p>
         )}
       </div>
-      <div className="flex items-end sm:col-span-5 sm:justify-end">
-        <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-1 text-muted-foreground"
+          onClick={onRemove}
+        >
           <Trash2 className="size-4" />
-          <span className="sr-only">Remove programme</span>
+          Remove programme
         </Button>
       </div>
     </div>
