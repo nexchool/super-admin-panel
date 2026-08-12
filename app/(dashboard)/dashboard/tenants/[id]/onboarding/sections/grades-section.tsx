@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader, type SectionHeaderProps } from "./section-header";
+import { useRemovalCascade } from "./use-removal-cascade";
 
 export function GradesSection({ title, subtitle }: SectionHeaderProps) {
   const {
@@ -17,6 +18,7 @@ export function GradesSection({ title, subtitle }: SectionHeaderProps) {
     formState: { errors },
   } = useFormContext<OnboardingConfig>();
   const { fields, append, remove } = useFieldArray({ control, name: "grades" });
+  const cascade = useRemovalCascade();
 
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
@@ -47,6 +49,13 @@ export function GradesSection({ title, subtitle }: SectionHeaderProps) {
     const maxSequence = fields.reduce((max, f) => Math.max(max, f.sequence), 0);
     append({ name, sequence: maxSequence + 1 });
     setManualName("");
+  };
+
+  // A grade's name is fixed once appended (there is no inline edit), so the
+  // append-time `fields[index].name` is still the right key to prune by.
+  const handleRemove = (index: number, name: string) => {
+    remove(index);
+    cascade({ kind: "grade", name });
   };
 
   const sortedGrades = fields
@@ -128,7 +137,7 @@ export function GradesSection({ title, subtitle }: SectionHeaderProps) {
               {field.name}
               <button
                 type="button"
-                onClick={() => remove(index)}
+                onClick={() => handleRemove(index, field.name)}
                 className="rounded-full p-0.5 hover:bg-muted-foreground/20"
               >
                 <X className="size-3" />

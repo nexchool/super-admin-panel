@@ -16,14 +16,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionHeader, type SectionHeaderProps } from "./section-header";
+import { useRemovalCascade } from "./use-removal-cascade";
 
 export function ProgrammesSection({ title, subtitle }: SectionHeaderProps) {
   const {
     control,
+    getValues,
     formState: { errors },
   } = useFormContext<OnboardingConfig>();
   const { fields, append, remove } = useFieldArray({ control, name: "programmes" });
   const { data: templates, isLoading: templatesLoading } = useSubjectTemplates();
+  const cascade = useRemovalCascade();
+
+  // The code is an editable input, so read the live value — `fields[index]`
+  // only holds what the row was appended with, not what has been typed since.
+  const handleRemove = (index: number) => {
+    const code = getValues(`programmes.${index}.code`);
+    remove(index);
+    if (code) cascade({ kind: "programme", code });
+  };
 
   return (
     <section className="space-y-4">
@@ -46,7 +57,7 @@ export function ProgrammesSection({ title, subtitle }: SectionHeaderProps) {
             index={index}
             templates={templates ?? []}
             templatesLoading={templatesLoading}
-            onRemove={() => remove(index)}
+            onRemove={() => handleRemove(index)}
           />
         ))}
       </div>

@@ -44,14 +44,29 @@ export function ClassesSection({ title, subtitle }: SectionHeaderProps) {
   const findIndex = (unit: string, programme: string, grade: string) =>
     fields.findIndex((f) => f.unit === unit && f.programme === programme && f.grade === grade);
 
-  const addSection = (unit: string, programme: string, grade: string, section: string) => {
-    const label = section.trim();
-    if (!label) return;
+  // The placeholder reads "A, B…", so a comma-separated list is what an
+  // operator naturally types. Taken literally that produced one section named
+  // "A, B" and no complaint from anywhere, so split on commas and add each.
+  const addSection = (unit: string, programme: string, grade: string, input: string) => {
+    const labels = input
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (labels.length === 0) return;
+
     const idx = findIndex(unit, programme, grade);
     if (idx === -1) {
-      append({ unit, programme, grade, sections: [label] });
-    } else if (!fields[idx].sections.includes(label)) {
-      update(idx, { ...fields[idx], sections: [...fields[idx].sections, label] });
+      append({ unit, programme, grade, sections: [...new Set(labels)] });
+      return;
+    }
+
+    const existing = fields[idx].sections;
+    const merged = [...existing];
+    for (const label of labels) {
+      if (!merged.includes(label)) merged.push(label);
+    }
+    if (merged.length !== existing.length) {
+      update(idx, { ...fields[idx], sections: merged });
     }
   };
 
