@@ -8,15 +8,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader, type SectionHeaderProps } from "./section-header";
+import { useRemovalCascade } from "./use-removal-cascade";
 
 export function BranchesSection({ title, subtitle }: SectionHeaderProps) {
   const {
     register,
     control,
+    getValues,
     formState: { errors },
   } = useFormContext<OnboardingConfig>();
 
   const { fields, append, remove } = useFieldArray({ control, name: "units" });
+  const cascade = useRemovalCascade();
+
+  // The code is an editable input, so read the live value — `fields[index]`
+  // only holds what the row was appended with, not what has been typed since.
+  const handleRemove = (index: number) => {
+    const code = getValues(`units.${index}.code`);
+    remove(index);
+    if (code) cascade({ kind: "unit", code });
+  };
 
   return (
     <section className="space-y-4">
@@ -47,7 +58,7 @@ export function BranchesSection({ title, subtitle }: SectionHeaderProps) {
               )}
             </div>
             <div className="flex items-end">
-              <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+              <Button type="button" variant="ghost" size="icon" onClick={() => handleRemove(index)}>
                 <Trash2 className="size-4" />
                 <span className="sr-only">Remove branch</span>
               </Button>

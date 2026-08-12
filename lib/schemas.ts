@@ -188,3 +188,4 @@ export const onboardingConfigSchema = z.object({
 export type OnboardingConfig = z.infer<typeof onboardingConfigSchema>;
 export type OnboardingTerm = z.infer<typeof onboardingTermSchema>;
 export type OnboardingClass = z.infer<typeof onboardingClassSchema>;
+export type OnboardingExtraSubject = z.infer<typeof onboardingExtraSubjectSchema>;
