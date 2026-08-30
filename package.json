@@ -21,7 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.574.0",
-    "next": "16.1.6",
+    "next": "^16.3.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.1",
@@ -41,9 +41,9 @@
     "typescript": "^5"
   },
   "optionalDependencies": {
-    "lightningcss-linux-arm64-gnu": "1.31.1",
-    "lightningcss-linux-x64-gnu": "1.31.1",
     "@tailwindcss/oxide-linux-arm64-gnu": "4.2.1",
-    "@tailwindcss/oxide-linux-x64-gnu": "4.2.1"
+    "@tailwindcss/oxide-linux-x64-gnu": "4.2.1",
+    "lightningcss-linux-arm64-gnu": "1.31.1",
+    "lightningcss-linux-x64-gnu": "1.31.1"
   }
 }
