@@ -8,6 +8,7 @@ import type {
   TenantDetail,
   FeatureCatalogItem,
   TenantBilling,
+  ThemeSeeds,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
@@ -118,6 +119,18 @@ export function useTenants(page: number, limit: number, search = "") {
   });
 }
 
+/** Read a `{primary, secondary?, tertiary?}` payload, or null if it isn't one. */
+function readSeeds(raw: unknown): ThemeSeeds | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const seeds = raw as Record<string, unknown>;
+  if (typeof seeds.primary !== "string") return null;
+  return {
+    primary: seeds.primary,
+    ...(typeof seeds.secondary === "string" ? { secondary: seeds.secondary } : {}),
+    ...(typeof seeds.tertiary === "string" ? { tertiary: seeds.tertiary } : {}),
+  };
+}
+
 export function useTenant(id: string | null) {
   return useQuery({
     queryKey: TENANT_KEY(id ?? ""),
@@ -158,6 +171,15 @@ export function useTenant(id: string | null) {
         trialEndsAt: typeof r.trial_ends_at === "string" ? r.trial_ends_at : null,
         billingCycle: typeof r.billing_cycle === "string" ? r.billing_cycle : "yearly",
         featureFlags,
+        themeSeeds: readSeeds(r.theme_seeds),
+        // The server is the authority on what "default" means, so the panel
+        // shows the colours the app actually ships with rather than a copy
+        // that can drift.
+        themeDefaultSeeds: readSeeds(r.theme_default_seeds) ?? {
+          primary: "#4648d4",
+          secondary: "#006591",
+          tertiary: "#6b38d4",
+        },
       } as TenantDetail;
     },
     enabled: !!id,

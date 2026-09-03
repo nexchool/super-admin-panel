@@ -68,6 +68,21 @@ export interface TenantDetail {
   trialEndsAt: string | null;
   billingCycle: string;
   featureFlags: Record<string, boolean>;
+  /** The school's brand colours; null until somebody sets a theme. */
+  themeSeeds: ThemeSeeds | null;
+  /** What the app ships with — shown as the starting point when unthemed. */
+  themeDefaultSeeds: ThemeSeeds;
+}
+
+/**
+ * The two or three colours a school is branded by. Everything else the mobile
+ * app draws is derived from these server-side (server/core/theme.py), so this
+ * is the whole of what an operator edits.
+ */
+export interface ThemeSeeds {
+  primary: string;
+  secondary?: string;
+  tertiary?: string;
 }
 
 // --- Feature catalog (GET /platform/feature-catalog) ---

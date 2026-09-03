@@ -56,6 +56,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { OnboardingSection } from "./onboarding-section";
+import { ThemeSection } from "./theme-section";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -582,6 +583,13 @@ export function TenantDetailView({ id }: { id: string }) {
           invalidateTenants();
           invalidateDashboard();
         }}
+      />
+
+      <ThemeSection
+        tenantId={id}
+        seeds={tenant.themeSeeds}
+        defaultSeeds={tenant.themeDefaultSeeds}
+        onSaved={invalidateTenant}
       />
 
       <Card className="mt-6 rounded-xl">
