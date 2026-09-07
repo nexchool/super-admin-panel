@@ -219,3 +219,19 @@ export type TenantIntegration = {
   status: string;
   health: TenantIntegrationHealth;
 };
+
+/** One sign-in method this build can execute (GET /platform/auth-methods) —
+ *  a property of the deployed code, not of any school's configuration. The
+ *  login-access card merges this catalog with a school's `AuthPolicyRule`s
+ *  so a method with no rule yet still gets a switch, defaulted off, instead
+ *  of disappearing. `isPaid` is what tells the card a method needs a working
+ *  messaging channel; it replaces a hardcoded list of paid method keys that
+ *  would otherwise go stale the moment a second paid method ships. */
+export type AuthMethodCatalogEntry = {
+  key: string;
+  identifierType: string;
+  credentialType: string | null;
+  requiresTenant: boolean;
+  isPaid: boolean;
+  countsTowardAccountLockout: boolean;
+};

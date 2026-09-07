@@ -11,6 +11,7 @@ import type {
   ThemeSeeds,
   TenantAuthPolicy,
   TenantIntegration,
+  AuthMethodCatalogEntry,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
@@ -18,6 +19,7 @@ const TENANTS_KEY = (page: number, limit: number, search: string) =>
   ["platform", "tenants", page, limit, search];
 const TENANT_KEY = (id: string) => ["platform", "tenant", id];
 const FEATURE_CATALOG_KEY = ["platform", "feature-catalog"];
+const AUTH_METHODS_KEY = ["platform", "auth-methods"];
 const TENANT_BILLING_KEY = (tenantId: string) => ["platform", "tenant", tenantId, "billing"];
 const TENANT_AUTH_POLICY_KEY = (tenantId: string) => [
   "platform",
@@ -51,6 +53,36 @@ export function useFeatureCatalog() {
           toggleable: Boolean(r.toggleable),
         };
       }) as FeatureCatalogItem[];
+    },
+  });
+}
+
+/** Every sign-in method this build can execute — what the deployed code can
+ *  do, not what any one school has switched on. Mirrors `useFeatureCatalog`:
+ *  a school's actual choices come from `useTenantAuthPolicy` instead. The
+ *  login-access card merges the two so a method with no policy rule yet
+ *  still gets a switch, rather than being unreachable until somebody edits
+ *  a rule by hand. */
+export function useAuthMethods() {
+  return useQuery({
+    queryKey: AUTH_METHODS_KEY,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const res = await api.get<{ data?: unknown }>("/api/platform/auth-methods");
+      const r = (res?.data ?? {}) as Record<string, unknown>;
+      const methods = Array.isArray(r.methods) ? r.methods : [];
+      return methods.map((entry: unknown) => {
+        const m = entry as Record<string, unknown>;
+        return {
+          key: String(m.key ?? ""),
+          identifierType: String(m.identifier_type ?? ""),
+          credentialType: (m.credential_type as string | null) ?? null,
+          requiresTenant: Boolean(m.requires_tenant),
+          isPaid: Boolean(m.is_paid),
+          countsTowardAccountLockout: Boolean(m.counts_toward_account_lockout),
+        };
+      }) as AuthMethodCatalogEntry[];
     },
   });
 }

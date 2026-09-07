@@ -5,13 +5,27 @@
  * a switch calls the method endpoint with the right shape, a paid method
  * with no working channel is called out rather than left silent, and a
  * refusal from the server reaches the operator instead of being swallowed.
+ *
+ * Task 13b adds a second source: `useAuthMethods` reports every sign-in
+ * method the build can execute, independent of whether this school has a
+ * policy rule for it. `ensure_default_policy` seeds a rule only for
+ * `email_password`, and that table's semantics are "absence means denied" —
+ * so before this task, `admission_id_password` and `mobile_pin` had no rule
+ * on a fresh school and therefore no switch at all, and could never be
+ * turned on from here. The card now merges the catalog with the rules; a
+ * method with no rule gets a switch, defaulted off.
  */
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
-import type { AuthPolicyRule, TenantAuthPolicy, TenantIntegration } from "@/types";
+import type {
+  AuthMethodCatalogEntry,
+  AuthPolicyRule,
+  TenantAuthPolicy,
+  TenantIntegration,
+} from "@/types";
 
 // `vi.hoisted` runs before `vi.mock` factories are hoisted above the imports,
 // so these are safe to close over below without a "used before initialized"
@@ -19,6 +33,7 @@ import type { AuthPolicyRule, TenantAuthPolicy, TenantIntegration } from "@/type
 const mocks = vi.hoisted(() => ({
   policyData: undefined as TenantAuthPolicy | undefined,
   integrationsData: [] as TenantIntegration[],
+  authMethodsData: [] as AuthMethodCatalogEntry[],
   setMethod: vi.fn(),
   updatePolicy: vi.fn(),
 }));
@@ -30,6 +45,7 @@ vi.mock("@/hooks/useApi", () => ({
     error: null,
   }),
   useTenantIntegrations: () => ({ data: mocks.integrationsData, isLoading: false }),
+  useAuthMethods: () => ({ data: mocks.authMethodsData, isLoading: false }),
   useSetAuthMethod: () => ({ mutateAsync: mocks.setMethod, isPending: false }),
   useUpdateAuthPolicy: () => ({ mutateAsync: mocks.updatePolicy, isPending: false }),
 }));
@@ -62,6 +78,42 @@ function policy(rules: AuthPolicyRule[]): TenantAuthPolicy {
   };
 }
 
+function authMethod(overrides: Partial<AuthMethodCatalogEntry> = {}): AuthMethodCatalogEntry {
+  return {
+    key: "email_password",
+    identifierType: "email",
+    credentialType: "password",
+    requiresTenant: false,
+    isPaid: false,
+    countsTowardAccountLockout: true,
+    ...overrides,
+  };
+}
+
+const CATALOG: AuthMethodCatalogEntry[] = [
+  authMethod({ key: "email_password", identifierType: "email", requiresTenant: false }),
+  authMethod({
+    key: "admission_id_password",
+    identifierType: "admission_id",
+    requiresTenant: true,
+  }),
+  authMethod({
+    key: "mobile_otp",
+    identifierType: "mobile",
+    credentialType: null,
+    requiresTenant: true,
+    isPaid: true,
+    countsTowardAccountLockout: false,
+  }),
+  authMethod({
+    key: "mobile_pin",
+    identifierType: "mobile",
+    credentialType: "pin",
+    requiresTenant: true,
+    countsTowardAccountLockout: false,
+  }),
+];
+
 function readyIntegration(overrides: Partial<TenantIntegration> = {}): TenantIntegration {
   return {
     id: "integration-1",
@@ -87,6 +139,7 @@ beforeEach(() => {
     rule({ methodKey: "mobile_otp", isEnabled: false }),
   ]);
   mocks.integrationsData = [];
+  mocks.authMethodsData = CATALOG;
   mocks.setMethod.mockResolvedValue(undefined);
   mocks.updatePolicy.mockResolvedValue(undefined);
 });
@@ -107,8 +160,12 @@ describe("LoginAccessSection", () => {
     render(<LoginAccessSection tenantId="t1" />);
 
     // email_password starts enabled for students; flipping it calls the
-    // mutation asking to turn that exact rule off.
-    await userEvent.click(screen.getByRole("switch", { name: /email/i }));
+    // mutation asking to turn that exact rule off. The catalog now offers
+    // every method to every subject kind, so "Email + password" alone would
+    // match three switches (one per column) — the name must pin down which.
+    await userEvent.click(
+      screen.getByRole("switch", { name: /email.*students/i })
+    );
 
     expect(mocks.setMethod).toHaveBeenCalledWith({
       methodKey: "email_password",
@@ -116,6 +173,38 @@ describe("LoginAccessSection", () => {
       enabled: false,
       surface: "any",
     });
+  });
+
+  it("shows a switch, off, for a method this school has no rule for, and switching it on calls the mutation", async () => {
+    // Neither `admission_id_password` nor `mobile_pin` has a rule in
+    // `mocks.policyData` — exactly the fresh-school state `ensure_default_policy`
+    // leaves behind, which is the bug this task fixes: the catalog must still
+    // offer them.
+    const { LoginAccessSection } = await import("./login-access-section");
+    render(<LoginAccessSection tenantId="t1" />);
+
+    const toggle = screen.getByRole("switch", {
+      name: /admission number \+ password.*students/i,
+    });
+    expect(toggle).not.toBeChecked();
+
+    await userEvent.click(toggle);
+
+    expect(mocks.setMethod).toHaveBeenCalledWith({
+      methodKey: "admission_id_password",
+      subjectKind: "student",
+      enabled: true,
+      surface: "any",
+    });
+  });
+
+  it("falls back to a readable label for a catalog method with no entry in METHOD_LABELS", async () => {
+    mocks.authMethodsData = [...CATALOG, authMethod({ key: "employer_badge_scan" })];
+
+    const { LoginAccessSection } = await import("./login-access-section");
+    render(<LoginAccessSection tenantId="t1" />);
+
+    expect(screen.getAllByText("employer badge scan").length).toBeGreaterThan(0);
   });
 
   it("warns when a paid method is enabled and its channel has no ready integration", async () => {
@@ -151,7 +240,7 @@ describe("LoginAccessSection", () => {
     render(<LoginAccessSection tenantId="t1" />);
 
     await userEvent.click(
-      screen.getByRole("switch", { name: /mobile number \+ otp/i })
+      screen.getByRole("switch", { name: /mobile number \+ otp.*students/i })
     );
 
     const { toast } = await import("sonner");

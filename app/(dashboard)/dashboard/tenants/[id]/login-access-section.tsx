@@ -13,12 +13,13 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { getErrorMessage } from "@/lib/api";
 import {
+  useAuthMethods,
   useSetAuthMethod,
   useTenantAuthPolicy,
   useTenantIntegrations,
   useUpdateAuthPolicy,
 } from "@/hooks/useApi";
-import type { AuthPolicyRule } from "@/types";
+import type { AuthMethodCatalogEntry, AuthPolicyRule } from "@/types";
 
 /** The people a rule can be about, in the order a school thinks of them. */
 const SUBJECT_KINDS: { key: string; label: string; hint: string }[] = [
@@ -55,11 +56,6 @@ const OTP_CHANNEL_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
 };
 
-/** Methods that cost money to attempt (`is_paid` on the server's strategy
- *  registry). Only `mobile_otp` today, but read from a list here so a future
- *  paid method needs one addition, not a new code path. */
-const PAID_METHOD_KEYS = ["mobile_otp"];
-
 function methodLabel(key: string): string {
   return METHOD_LABELS[key] ?? key.replace(/_/g, " ");
 }
@@ -72,6 +68,36 @@ function channelLabel(channel: string): string {
   return OTP_CHANNEL_LABELS[channel] ?? channel;
 }
 
+/** One row the card renders: always the catalog's shape, with state read
+ *  from a matching rule when one exists.
+ *
+ *  Nothing here declares which subject kinds a method applies to — the
+ *  strategy registry this catalog comes from doesn't declare that either
+ *  (see `modules/auth/strategies/base.py`), so every method is offered to
+ *  every subject kind rather than guessing at a restriction nobody wrote
+ *  down. */
+function mergeMethodsForSubject(
+  subjectKind: string,
+  catalog: AuthMethodCatalogEntry[],
+  rules: AuthPolicyRule[]
+): AuthPolicyRule[] {
+  return catalog.map((method) => {
+    const existing = rules.find(
+      (rule) => rule.subjectKind === subjectKind && rule.methodKey === method.key
+    );
+    return (
+      existing ?? {
+        subjectKind,
+        surface: "any",
+        methodKey: method.key,
+        isEnabled: false,
+        enabledAt: null,
+        notes: null,
+      }
+    );
+  });
+}
+
 /**
  * Which ways in this school allows — and, from this phase on, the controls
  * that change it. Switching a method on or off, or changing family access,
@@ -81,12 +107,18 @@ function channelLabel(channel: string): string {
 export function LoginAccessSection({ tenantId }: { tenantId: string }) {
   const { data: policy, isLoading, error } = useTenantAuthPolicy(tenantId);
   const { data: integrations } = useTenantIntegrations(tenantId);
+  const { data: authMethods } = useAuthMethods();
   const setMethod = useSetAuthMethod(tenantId);
   const updatePolicy = useUpdateAuthPolicy(tenantId);
 
   const rules = policy?.rules ?? [];
+  const catalog = authMethods ?? [];
+  const isPaidMethod = (methodKey: string): boolean =>
+    catalog.find((method) => method.key === methodKey)?.isPaid ?? false;
+  // Every method the build has, for this subject kind, whether or not a
+  // rule exists yet — see `mergeMethodsForSubject` above.
   const rulesFor = (subjectKind: string): AuthPolicyRule[] =>
-    rules.filter((rule) => rule.subjectKind === subjectKind);
+    mergeMethodsForSubject(subjectKind, catalog, rules);
 
   async function handleToggleMethod(rule: AuthPolicyRule, enabled: boolean) {
     try {
@@ -130,7 +162,7 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
   );
 
   const paidMethodEnabled = rules.some(
-    (rule) => PAID_METHOD_KEYS.includes(rule.methodKey) && rule.isEnabled
+    (rule) => isPaidMethod(rule.methodKey) && rule.isEnabled
   );
   const channel = policy?.otpDeliveryChannel || "sms";
   const channelIntegration = (integrations ?? []).find(
@@ -203,7 +235,12 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
                             <Switch
                               checked={rule.isEnabled}
                               disabled={setMethod.isPending}
-                              aria-label={methodLabel(rule.methodKey)}
+                              // The catalog now offers every method to every
+                              // subject kind (see `mergeMethodsForSubject`),
+                              // so the method name alone names three
+                              // identical switches, one per column. The
+                              // column label disambiguates them.
+                              aria-label={`${methodLabel(rule.methodKey)} — ${label}`}
                               onCheckedChange={(checked) =>
                                 handleToggleMethod(rule, checked)
                               }
