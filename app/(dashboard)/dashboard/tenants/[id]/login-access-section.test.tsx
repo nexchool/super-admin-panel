@@ -145,7 +145,7 @@ describe("LoginAccessSection", () => {
   it("surfaces a server refusal to the operator instead of swallowing it", async () => {
     const serverMessage =
       "This method sends a message, and this school has no working sms provider. No sms provider is configured for this school.";
-    mocks.setMethod.mockRejectedValueOnce(new ApiError(serverMessage, 422));
+    mocks.setMethod.mockRejectedValueOnce(new ApiError(serverMessage, 400));
 
     const { LoginAccessSection } = await import("./login-access-section");
     render(<LoginAccessSection tenantId="t1" />);

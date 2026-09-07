@@ -83,6 +83,33 @@ export function getErrorMessage(e: unknown): string {
 function extractApiErrorMessage(body: unknown, statusText: string): string {
   if (typeof body === "object" && body !== null) {
     const o = body as Record<string, unknown>;
+
+    // `validation_error_response` (server/shared/helpers.py) always sets the
+    // top-level `message` to the generic "Validation failed" and puts the
+    // actual reason under `details.<field>` — e.g. `{"method_key": "This
+    // method sends a message, and this school has no working sms
+    // provider…"}`. That per-field text is the only thing that tells an
+    // operator what to do next, so prefer it over the generic message
+    // whenever it is present. `details` here is a flat `{field: message}`
+    // map, not the `[{field, issue}]` list from api-conventions.md — read
+    // the actual helper rather than the aspirational doc.
+    if (
+      typeof o.details === "object" &&
+      o.details !== null &&
+      !Array.isArray(o.details)
+    ) {
+      const fieldMessages = Object.values(o.details as Record<string, unknown>).filter(
+        (v): v is string => typeof v === "string" && v.trim().length > 0
+      );
+      // One field failing is the common case — show its message verbatim,
+      // with no field-name prefix, since the server already writes a full
+      // sentence. Several at once still need to reach the operator, and a
+      // toast can only show one string, so join them into one readable line
+      // rather than picking just the first and losing the rest.
+      if (fieldMessages.length === 1) return fieldMessages[0];
+      if (fieldMessages.length > 1) return fieldMessages.join(" ");
+    }
+
     if (typeof o.message === "string" && o.message.trim()) return o.message;
     if (typeof o.error === "string" && o.error.trim()) return o.error;
   }
