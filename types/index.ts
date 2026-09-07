@@ -200,16 +200,29 @@ export type TenantAuthPolicy = {
 };
 
 /** A school's readiness report for one integration capability (e.g. "sms"),
- *  without sending anything to produce it. Minimal read-only shape for the
- *  readiness banner on the login-access card; Task 14 builds the full
- *  integrations section on top of this same hook. */
-export type TenantIntegrationHealth = {
+ *  without sending anything to produce it. `checks` is the server's own
+ *  named checklist (`integration_row`, `enabled`, `provider_supported`,
+ *  `credentials_present`) — shown as a breakdown, never re-derived client
+ *  side. `providerReachable` is `null` whenever the vendor offers no free
+ *  non-sending check (both real providers today); `detail` then already
+ *  carries the server's "Delivery was not verified…" sentence, so the panel
+ *  renders it rather than inventing its own wording. */
+export type IntegrationHealth = {
   ready: boolean;
   configured: boolean;
   credentialsPresent: boolean;
   providerSupported: boolean;
   providerReachable: boolean | null;
   detail: string | null;
+  checks?: Record<string, boolean>;
+};
+
+/** What an operator may see about one stored credential: the environment
+ *  variable *name* it points at, and whether that name currently resolves on
+ *  this server. Never a value — see `server/modules/integrations/credentials.py`. */
+export type IntegrationCredentialInfo = {
+  reference: string;
+  isSet: boolean;
 };
 
 export type TenantIntegration = {
@@ -217,7 +230,46 @@ export type TenantIntegration = {
   capability: string;
   providerKey: string;
   status: string;
-  health: TenantIntegrationHealth;
+  health: IntegrationHealth;
+  /** Non-secret settings — sender id, phone number id, template ids. Absent
+   *  on the minimal shape older callers (the login-access readiness banner)
+   *  still use. */
+  configuration?: Record<string, unknown>;
+  /** Purpose → credential info. Keys are whatever the operator chose when
+   *  configuring; see `IntegrationCredentialInfo`. */
+  credentials?: Record<string, IntegrationCredentialInfo>;
+};
+
+/** One provider this build has a client for, within one capability — from
+ *  `GET /platform/integration-capabilities`. A property of the deployed
+ *  code, not of any school's configuration; `requiredCredentials` names the
+ *  environment variables that provider's client reads, which is what the
+ *  Integrations form uses to ask for exactly the right credential fields. */
+export type IntegrationProvider = {
+  key: string;
+  name: string;
+  supportsIdempotency: boolean;
+  isBillable: boolean;
+  isTestDouble: boolean;
+  requiredCredentials: string[];
+};
+
+export type IntegrationCapability = {
+  capability: string;
+  label: string;
+  providers: IntegrationProvider[];
+};
+
+/** One message a test-double provider pretended to send, from the
+ *  development-only outbox. Never populated by a real provider — see
+ *  `server/modules/integrations/outbox.py`. */
+export type IntegrationOutboxMessage = {
+  tenantId: string;
+  channel: string;
+  destination: string;
+  body: string;
+  purpose: string;
+  sentAt: string;
 };
 
 /** One sign-in method this build can execute (GET /platform/auth-methods) —

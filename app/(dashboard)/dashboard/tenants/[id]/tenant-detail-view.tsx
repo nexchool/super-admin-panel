@@ -58,6 +58,7 @@ import {
 import { OnboardingSection } from "./onboarding-section";
 import { ThemeSection } from "./theme-section";
 import { LoginAccessSection } from "./login-access-section";
+import { IntegrationsSection } from "./integrations-section";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -594,6 +595,8 @@ export function TenantDetailView({ id }: { id: string }) {
       />
 
       <LoginAccessSection tenantId={id} />
+
+      <IntegrationsSection tenantId={id} />
 
       <Card className="mt-6 rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import type {
   DashboardResponse,
   PaginatedTenantsResponse,
@@ -12,6 +12,8 @@ import type {
   TenantAuthPolicy,
   TenantIntegration,
   AuthMethodCatalogEntry,
+  IntegrationCapability,
+  IntegrationOutboxMessage,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
@@ -33,6 +35,8 @@ const TENANT_INTEGRATIONS_KEY = (tenantId: string) => [
   tenantId,
   "integrations",
 ];
+const INTEGRATION_CAPABILITIES_KEY = ["platform", "integration-capabilities"];
+const INTEGRATION_OUTBOX_KEY = ["platform", "integrations", "outbox"];
 
 const STALE_TIME = 2 * 60 * 1000;
 
@@ -585,8 +589,9 @@ export function useUpdateAuthPolicy(tenantId: string) {
 }
 
 /** A school's configured integrations, with a no-send readiness report for
- *  each. Minimal read-only shape for the login-access card's readiness
- *  banner; Task 14 builds the full integrations section on top of this. */
+ *  each. Backs both the login-access card's readiness banner and the full
+ *  Integrations section (Task 14) — `configuration` and `credentials` are
+ *  the settings/credential-name data the section's form reads and edits. */
 export function useTenantIntegrations(tenantId: string) {
   return useQuery({
     queryKey: TENANT_INTEGRATIONS_KEY(tenantId),
@@ -601,11 +606,27 @@ export function useTenantIntegrations(tenantId: string) {
       return integrations.map((entry: unknown) => {
         const integration = entry as Record<string, unknown>;
         const health = (integration.health ?? {}) as Record<string, unknown>;
+        const checks = (health.checks ?? {}) as Record<string, unknown>;
+        const configuration = (integration.configuration ?? {}) as Record<string, unknown>;
+        // Server field is `credentials` (see `TenantIntegration.to_dict` in
+        // `server/modules/integrations/models.py`) — purpose -> {reference,
+        // is_set}. Never a value; see `credentials.py`.
+        const credentialsRaw = (integration.credentials ?? {}) as Record<string, unknown>;
+        const credentials: Record<string, { reference: string; isSet: boolean }> = {};
+        for (const [purpose, info] of Object.entries(credentialsRaw)) {
+          const c = (info ?? {}) as Record<string, unknown>;
+          credentials[purpose] = {
+            reference: String(c.reference ?? ""),
+            isSet: Boolean(c.is_set),
+          };
+        }
         return {
           id: String(integration.id ?? ""),
           capability: String(integration.capability ?? ""),
           providerKey: String(integration.provider_key ?? ""),
           status: String(integration.status ?? ""),
+          configuration,
+          credentials,
           health: {
             ready: Boolean(health.ready),
             configured: Boolean(health.configured),
@@ -613,9 +634,165 @@ export function useTenantIntegrations(tenantId: string) {
             providerSupported: Boolean(health.provider_supported),
             providerReachable: (health.provider_reachable as boolean | null) ?? null,
             detail: (health.detail as string | null) ?? null,
+            checks: Object.fromEntries(
+              Object.entries(checks).map(([k, v]) => [k, Boolean(v)])
+            ),
           },
         };
       }) as TenantIntegration[];
+    },
+  });
+}
+
+/** Every provider this build has a client for, per capability — a property
+ *  of the deployed code, not of any school's configuration. The Integrations
+ *  form reads `requiredCredentials` off the selected provider to ask for
+ *  exactly the right credential fields, and nothing else. */
+export function useIntegrationCapabilities() {
+  return useQuery({
+    queryKey: INTEGRATION_CAPABILITIES_KEY,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const res = await api.get<{ data?: unknown }>(
+        "/api/platform/integration-capabilities"
+      );
+      const r = (res?.data ?? {}) as Record<string, unknown>;
+      const capabilities = Array.isArray(r.capabilities) ? r.capabilities : [];
+      return capabilities.map((entry: unknown) => {
+        const c = entry as Record<string, unknown>;
+        const providers = Array.isArray(c.providers) ? c.providers : [];
+        return {
+          capability: String(c.capability ?? ""),
+          label: String(c.label ?? c.capability ?? ""),
+          providers: providers.map((p: unknown) => {
+            const provider = p as Record<string, unknown>;
+            return {
+              key: String(provider.key ?? ""),
+              name: String(provider.name ?? provider.key ?? ""),
+              supportsIdempotency: Boolean(provider.supports_idempotency),
+              isBillable: Boolean(provider.is_billable),
+              isTestDouble: Boolean(provider.is_test_double),
+              requiredCredentials: Array.isArray(provider.required_credentials)
+                ? (provider.required_credentials as unknown[]).map(String)
+                : [],
+            };
+          }),
+        };
+      }) as IntegrationCapability[];
+    },
+  });
+}
+
+/** Point a school's capability at a provider. **Never enables it** — the
+ *  server starts a newly configured integration disabled on purpose (see
+ *  `configure_integration`'s docstring), so this mutation cannot itself put
+ *  traffic on the wire. `credentialReferences` must already be environment
+ *  variable *names* — client-side validation happens in the form, before
+ *  this is ever called; the server refuses anything else regardless. */
+export function useConfigureIntegration(tenantId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      capability: string;
+      providerKey: string;
+      configuration: Record<string, unknown>;
+      credentialReferences: Record<string, string>;
+    }) =>
+      api.post(`/api/platform/tenants/${tenantId}/integrations`, {
+        capability: input.capability,
+        provider_key: input.providerKey,
+        configuration: input.configuration,
+        credential_references: input.credentialReferences,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TENANT_INTEGRATIONS_KEY(tenantId) });
+    },
+  });
+}
+
+/** Turn one integration on or off. Disabling is refused by the server while
+ *  an enabled paid sign-in method still depends on it; enabling is refused
+ *  while its credentials are not present — both refusals arrive as the
+ *  server's own wording via `getErrorMessage`, not reworded here. */
+export function useSetIntegrationStatus(tenantId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { capability: string; status: "enabled" | "disabled" }) =>
+      api.patch(
+        `/api/platform/tenants/${tenantId}/integrations/${input.capability}/status`,
+        { status: input.status }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TENANT_INTEGRATIONS_KEY(tenantId) });
+    },
+  });
+}
+
+/** Send one real message through a school's integration, to prove it works.
+ *  **Not a health check** — this is billable and rings a real phone (see
+ *  `server/modules/integrations/health.py`), which is why it is a distinct,
+ *  operator-initiated action rather than folded into the readiness report.
+ *  Rate-limited by the server to 5 per hour per operator. */
+export function useTestSend(tenantId: string) {
+  return useMutation({
+    mutationFn: async (input: { capability: string; destination: string }) => {
+      const res = await api.post<{ data?: unknown }>(
+        `/api/platform/tenants/${tenantId}/integrations/${input.capability}/test-send`,
+        { destination: input.destination }
+      );
+      const r = (res?.data ?? {}) as Record<string, unknown>;
+      return {
+        sent: Boolean(r.sent),
+        status: String(r.status ?? ""),
+        errorCode: (r.error_code as string | null) ?? null,
+        errorMessage: (r.error_message as string | null) ?? null,
+        operationId: (r.operation_id as string | null) ?? null,
+      };
+    },
+  });
+}
+
+/** What a test-double provider pretended to send, for a developer to read —
+ *  never real message content. **404 outside development, on purpose** (see
+ *  `read_integration_outbox`): that is "unavailable", not an error, so this
+ *  reports it as `available: false` rather than surfacing a failed query an
+ *  operator would otherwise see on every production tenant page. */
+export function useIntegrationOutbox() {
+  return useQuery({
+    queryKey: INTEGRATION_OUTBOX_KEY,
+    staleTime: 10 * 1000,
+    retry: false,
+    queryFn: async (): Promise<{
+      available: boolean;
+      messages: IntegrationOutboxMessage[];
+    }> => {
+      try {
+        const res = await api.get<{ data?: unknown }>(
+          "/api/platform/integrations/outbox"
+        );
+        const r = (res?.data ?? {}) as Record<string, unknown>;
+        const messages = Array.isArray(r.messages) ? r.messages : [];
+        return {
+          available: true,
+          messages: messages.map((entry: unknown) => {
+            const m = entry as Record<string, unknown>;
+            return {
+              tenantId: String(m.tenant_id ?? ""),
+              channel: String(m.channel ?? ""),
+              destination: String(m.destination ?? ""),
+              body: String(m.body ?? ""),
+              purpose: String(m.purpose ?? ""),
+              sentAt: String(m.sent_at ?? ""),
+            };
+          }),
+        };
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) {
+          return { available: false, messages: [] };
+        }
+        throw e;
+      }
     },
   });
 }
