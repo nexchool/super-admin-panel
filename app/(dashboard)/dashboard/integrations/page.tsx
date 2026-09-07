@@ -1,6 +1,6 @@
 "use client";
 
-import { Beaker, CircleDollarSign, Plug, RefreshCw } from "lucide-react";
+import { Beaker, Check, CircleDollarSign, Plug, RefreshCw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/api";
@@ -123,26 +123,49 @@ function ProviderRow({ provider }: { provider: IntegrationProvider }) {
       </div>
 
       <div className="mt-3">
-        <p className="text-xs font-medium text-muted-foreground">Required credentials</p>
-        {provider.requiredCredentials.length === 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground">Required credentials</p>
+          {provider.requiredCredentials.length > 0 && (
+            <Badge
+              variant={provider.credentialsPresent ? "success" : "warning"}
+              className="gap-1"
+            >
+              {provider.credentialsPresent ? (
+                <Check className="size-3" />
+              ) : (
+                <X className="size-3" />
+              )}
+              {provider.credentialsPresent ? "Ready on this server" : "Not ready on this server"}
+            </Badge>
+          )}
+        </div>
+        {provider.credentials.length === 0 ? (
           <p className="mt-1 text-sm text-muted-foreground">
             None — this provider needs no server credential.
           </p>
         ) : (
           <ul className="mt-1 flex flex-wrap gap-2">
-            {provider.requiredCredentials.map((name) => (
-              <li key={name}>
-                <Badge variant="outline" className="font-mono">
-                  {name}
+            {provider.credentials.map((credential) => (
+              <li key={credential.reference}>
+                <Badge
+                  variant={credential.isSet ? "success" : "destructive"}
+                  className="gap-1"
+                >
+                  {credential.isSet ? (
+                    <Check className="size-3" />
+                  ) : (
+                    <X className="size-3" />
+                  )}
+                  <span className="font-mono">{credential.reference}</span>
+                  <span>{credential.isSet ? "— set" : "— not set"}</span>
                 </Badge>
               </li>
             ))}
           </ul>
         )}
         <p className="mt-1 text-xs text-muted-foreground">
-          Names of the environment variables this provider reads — never a value. Whether one
-          is actually set is reported per school, once a school configures this provider (see
-          that school&apos;s Integrations tab).
+          Names of the environment variables this provider reads, and whether each is set on
+          this server — never a value.
         </p>
       </div>
     </div>

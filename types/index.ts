@@ -244,7 +244,15 @@ export type TenantIntegration = {
  *  `GET /platform/integration-capabilities`. A property of the deployed
  *  code, not of any school's configuration; `requiredCredentials` names the
  *  environment variables that provider's client reads, which is what the
- *  Integrations form uses to ask for exactly the right credential fields. */
+ *  Integrations form uses to ask for exactly the right credential fields.
+ *
+ *  `credentials`/`credentialsPresent` are that same deployed-code property
+ *  extended one step further: not just which variables a provider needs,
+ *  but whether they are actually set *on this server* — the fact the
+ *  platform-wide catalog page exists to show, so "can we offer WhatsApp at
+ *  all yet?" has an answer without opening a school. Reuses
+ *  `IntegrationCredentialInfo`, the same never-a-value shape a school's own
+ *  stored credential references already use. */
 export type IntegrationProvider = {
   key: string;
   name: string;
@@ -252,6 +260,12 @@ export type IntegrationProvider = {
   isBillable: boolean;
   isTestDouble: boolean;
   requiredCredentials: string[];
+  /** One entry per `requiredCredentials` name, in the same order. */
+  credentials: IntegrationCredentialInfo[];
+  /** Whether every entry above is set. Vacuously true for a provider that
+   *  needs no credentials (the test doubles) — never reported as missing
+   *  something it never required. */
+  credentialsPresent: boolean;
 };
 
 export type IntegrationCapability = {

@@ -1,12 +1,14 @@
 /**
  * The platform-wide integrations catalog answers "can we offer WhatsApp at
  * all yet?" without opening a school — it is read from the provider
- * registry, not from any tenant's configuration. These tests pin down the
- * three things that make that distinction hold on screen: every registered
- * provider actually shows up under its capability, a test double
- * (`is_test_double`) is visibly labelled as one so an operator does not
- * mistake it for a real option, and a credential is only ever named — never
- * valued, even if a future response shape smuggled a value in.
+ * registry, not from any tenant's configuration. These tests pin down what
+ * makes that distinction hold on screen: every registered provider actually
+ * shows up under its capability, a test double (`is_test_double`) is
+ * visibly labelled as one so an operator does not mistake it for a real
+ * option, a provider's credentials show a set/not-set indicator — the
+ * actual answer to "can we offer this yet" — and a credential is only ever
+ * named plus that indicator, never valued, even if a future response shape
+ * smuggled a value in.
  */
 
 import { render, screen } from "@testing-library/react";
@@ -41,6 +43,8 @@ function smsCapability(
         isBillable: true,
         isTestDouble: false,
         requiredCredentials: ["MSG91_AUTH_KEY"],
+        credentials: [{ reference: "MSG91_AUTH_KEY", isSet: false }],
+        credentialsPresent: false,
       },
       {
         key: "fake_sms",
@@ -49,6 +53,8 @@ function smsCapability(
         isBillable: false,
         isTestDouble: true,
         requiredCredentials: [],
+        credentials: [],
+        credentialsPresent: true,
       },
     ],
     ...overrides,
@@ -69,6 +75,8 @@ function whatsappCapability(
         isBillable: true,
         isTestDouble: false,
         requiredCredentials: ["META_WHATSAPP_ACCESS_TOKEN"],
+        credentials: [{ reference: "META_WHATSAPP_ACCESS_TOKEN", isSet: true }],
+        credentialsPresent: true,
       },
     ],
     ...overrides,
@@ -115,21 +123,53 @@ describe("IntegrationsCatalogPage", () => {
     expect(screen.getByText("No idempotency support")).toBeInTheDocument();
   });
 
-  it("shows only credential names, never a value — even one smuggled onto the provider", async () => {
+  it("shows a not-set indicator for a missing credential and a set indicator for a present one", async () => {
+    const { default: IntegrationsCatalogPage } = await import("./page");
+    render(<IntegrationsCatalogPage />);
+
+    // MSG91_AUTH_KEY is not set in the fixture; META_WHATSAPP_ACCESS_TOKEN is.
+    expect(screen.getByText(/not set/i)).toBeInTheDocument();
+    const msg91Credential = screen.getByText("MSG91_AUTH_KEY").closest("li");
+    expect(msg91Credential?.textContent ?? "").toMatch(/not set/i);
+
+    const metaCredential = screen.getByText("META_WHATSAPP_ACCESS_TOKEN").closest("li");
+    expect(metaCredential?.textContent ?? "").toMatch(/set/i);
+    expect(metaCredential?.textContent ?? "").not.toMatch(/not set/i);
+
+    // The page used to point operators at a school's Integrations tab to
+    // find out whether a credential was actually set, because the platform
+    // endpoint could not answer that itself. Now that it can, that specific
+    // workaround note must be gone (the unrelated "configure a vendor for a
+    // school" pointer earlier on the page is legitimate and stays).
+    expect(
+      screen.queryByText(/is reported per school/i)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/once a school configures this provider/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows only credential names and a set/not-set indicator, never a value — even one smuggled onto the payload", async () => {
     // Simulate a future response shape that started attaching a value
-    // somewhere on the provider object. The component must read nothing
-    // but `requiredCredentials` (a list of names), so this must never reach
-    // the screen no matter what else the API response carries.
+    // somewhere on the provider or credential object. The component must
+    // read nothing but `requiredCredentials` (names) and each credential's
+    // `reference`/`isSet`, so a value must never reach the screen no matter
+    // what else the API response carries.
     const poisoned = smsCapability();
     (poisoned.providers[0] as unknown as Record<string, unknown>).credentialValue =
       "sk_live_should_never_render";
+    (poisoned.providers[0].credentials[0] as unknown as Record<string, unknown>).value =
+      "sk_live_also_should_never_render";
     mocks.data = [poisoned];
 
     const { default: IntegrationsCatalogPage } = await import("./page");
     render(<IntegrationsCatalogPage />);
 
     expect(screen.getByText("MSG91_AUTH_KEY")).toBeInTheDocument();
+    expect(screen.getByText(/not set/i)).toBeInTheDocument();
     expect(screen.queryByText(/sk_live_should_never_render/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sk_live_also_should_never_render/)).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/should_never_render/);
   });
 
   it("renders without crashing while the request is loading", async () => {

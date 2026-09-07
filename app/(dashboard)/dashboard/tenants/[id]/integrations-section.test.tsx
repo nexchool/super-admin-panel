@@ -56,6 +56,8 @@ function smsCapability(overrides: Partial<IntegrationCapability> = {}): Integrat
         isBillable: true,
         isTestDouble: false,
         requiredCredentials: ["MSG91_AUTH_KEY"],
+        credentials: [{ reference: "MSG91_AUTH_KEY", isSet: true }],
+        credentialsPresent: true,
       },
     ],
     ...overrides,

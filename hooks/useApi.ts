@@ -647,7 +647,10 @@ export function useTenantIntegrations(tenantId: string) {
 /** Every provider this build has a client for, per capability — a property
  *  of the deployed code, not of any school's configuration. The Integrations
  *  form reads `requiredCredentials` off the selected provider to ask for
- *  exactly the right credential fields, and nothing else. */
+ *  exactly the right credential fields, and nothing else. The catalog page
+ *  additionally reads `credentials`/`credentialsPresent` — whether those
+ *  same variables are actually set on this server — to answer "can we
+ *  offer this yet?" without opening a school. */
 export function useIntegrationCapabilities() {
   return useQuery({
     queryKey: INTEGRATION_CAPABILITIES_KEY,
@@ -667,6 +670,19 @@ export function useIntegrationCapabilities() {
           label: String(c.label ?? c.capability ?? ""),
           providers: providers.map((p: unknown) => {
             const provider = p as Record<string, unknown>;
+            // Server field is `credentials` — a list of {reference, is_set},
+            // one per `required_credentials` name (see `describe_capabilities`
+            // in `server/modules/integrations/services.py`). Never a value.
+            const credentialsRaw = Array.isArray(provider.credentials)
+              ? provider.credentials
+              : [];
+            const credentials = credentialsRaw.map((entry: unknown) => {
+              const c = (entry ?? {}) as Record<string, unknown>;
+              return {
+                reference: String(c.reference ?? ""),
+                isSet: Boolean(c.is_set),
+              };
+            });
             return {
               key: String(provider.key ?? ""),
               name: String(provider.name ?? provider.key ?? ""),
@@ -676,6 +692,8 @@ export function useIntegrationCapabilities() {
               requiredCredentials: Array.isArray(provider.required_credentials)
                 ? (provider.required_credentials as unknown[]).map(String)
                 : [],
+              credentials,
+              credentialsPresent: Boolean(provider.credentials_present),
             };
           }),
         };
