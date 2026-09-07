@@ -257,6 +257,24 @@ describe("LoginAccessSection", () => {
     expect(screen.queryByText(/no working sms provider/i)).not.toBeInTheDocument();
   });
 
+  it("shows the OTP delivery channel selector even when mobile_otp is enabled nowhere yet", async () => {
+    // The server deliberately allows pre-selecting a channel before
+    // `mobile_otp` is switched on anywhere
+    // (`test_a_school_not_using_mobile_otp_may_still_pre_select_a_channel`
+    // in server/tests/auth/test_otp_delivery_channel.py) — a WhatsApp-only
+    // school must be able to choose WhatsApp without first standing up an
+    // SMS integration it will never use.
+    mocks.policyData = policy([
+      rule({ methodKey: "email_password", isEnabled: true }),
+      rule({ methodKey: "mobile_otp", isEnabled: false }),
+    ]);
+
+    const { LoginAccessSection } = await import("./login-access-section");
+    render(<LoginAccessSection tenantId="t1" />);
+
+    expect(screen.getByText(/otp delivery channel/i)).toBeInTheDocument();
+  });
+
   it("surfaces a server refusal to the operator instead of swallowing it", async () => {
     const serverMessage =
       "This method sends a message, and this school has no working sms provider. No sms provider is configured for this school.";

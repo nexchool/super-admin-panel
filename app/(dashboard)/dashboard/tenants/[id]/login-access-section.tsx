@@ -162,10 +162,6 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
     }
   }
 
-  const mobileOtpEnabledAnywhere = rules.some(
-    (rule) => rule.methodKey === "mobile_otp" && rule.isEnabled
-  );
-
   const paidMethodEnabled = rules.some(
     (rule) => isPaidMethod(rule.methodKey) && rule.isEnabled
   );
@@ -308,29 +304,38 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
                   </SelectContent>
                 </Select>
               </div>
-              {mobileOtpEnabledAnywhere && (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">
-                    OTP delivery channel
-                  </p>
-                  <Select
-                    value={policy.otpDeliveryChannel}
-                    onValueChange={handleOtpChannelChange}
-                    disabled={updatePolicy.isPending}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(OTP_CHANNEL_LABELS).map(([value, text]) => (
-                        <SelectItem key={value} value={value}>
-                          {text}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* Rendered unconditionally — the server deliberately allows
+                  pre-selecting a channel before `mobile_otp` is switched on
+                  anywhere (see `test_a_school_not_using_mobile_otp_may_still_pre_select_a_channel`
+                  in `server/tests/auth/test_otp_delivery_channel.py`); hiding
+                  this behind "already enabled somewhere" made a WhatsApp-only
+                  school stand up a working SMS integration it would never
+                  use just to unlock the selector that lets it choose
+                  WhatsApp instead. The server's own guard — refusing the
+                  channel change once `mobile_otp` is live on a channel with
+                  no working provider — still applies and surfaces here via
+                  `handleOtpChannelChange`'s error toast. */}
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  OTP delivery channel
+                </p>
+                <Select
+                  value={policy.otpDeliveryChannel}
+                  onValueChange={handleOtpChannelChange}
+                  disabled={updatePolicy.isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(OTP_CHANNEL_LABELS).map(([value, text]) => (
+                      <SelectItem key={value} value={value}>
+                        {text}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         )}

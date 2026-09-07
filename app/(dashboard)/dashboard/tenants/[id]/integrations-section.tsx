@@ -405,6 +405,13 @@ function CapabilityPanel({
                 below both need one.
               </p>
             )}
+            <p className="text-xs text-muted-foreground">
+              Leave variable names blank only for a vendor whose template
+              needs none. A sign-in code template needs one name per value it
+              fills — the OTP template takes two, for the code and the
+              expiry minutes — and a mismatch fails at sign-in time, not
+              here.
+            </p>
             {templateRows.map((row, index) => (
               <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
                 <Input
@@ -419,7 +426,7 @@ function CapabilityPanel({
                   onChange={(e) => updateTemplateRow(index, { id: e.target.value })}
                 />
                 <Input
-                  placeholder="Variable names, comma-separated (optional)"
+                  placeholder="Variable names, comma-separated (e.g. OTP,MINUTES)"
                   value={row.variables}
                   onChange={(e) => updateTemplateRow(index, { variables: e.target.value })}
                 />
