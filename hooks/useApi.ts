@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   DashboardResponse,
@@ -10,6 +10,7 @@ import type {
   TenantBilling,
   ThemeSeeds,
   TenantAuthPolicy,
+  TenantIntegration,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
@@ -23,6 +24,12 @@ const TENANT_AUTH_POLICY_KEY = (tenantId: string) => [
   "tenant",
   tenantId,
   "auth-policy",
+];
+const TENANT_INTEGRATIONS_KEY = (tenantId: string) => [
+  "platform",
+  "tenant",
+  tenantId,
+  "integrations",
 ];
 
 const STALE_TIME = 2 * 60 * 1000;
@@ -462,8 +469,9 @@ export function useInvalidateTenantAdmins(tenantId: string | null) {
     queryClient.invalidateQueries({ queryKey: TENANT_ADMINS_KEY(tenantId ?? "") });
 }
 
-/** A school's authentication policy. Read-only: there is no mutation endpoint
- *  for it yet, deliberately — the policy is recorded before it is enforced. */
+/** A school's authentication policy: which methods it permits, for which
+ *  people, and its family-access, credential and OTP-channel settings. Backed
+ *  by `useSetAuthMethod` and `useUpdateAuthPolicy` for writes. */
 export function useTenantAuthPolicy(tenantId: string) {
   return useQuery({
     queryKey: TENANT_AUTH_POLICY_KEY(tenantId),
@@ -479,6 +487,7 @@ export function useTenantAuthPolicy(tenantId: string) {
         tenantId: String(r.tenant_id ?? tenantId),
         familyAccessMode: String(r.family_access_mode ?? ""),
         studentCredentialPolicy: String(r.student_credential_policy ?? ""),
+        otpDeliveryChannel: String(r.otp_delivery_channel ?? ""),
         isConfigured: Boolean(r.is_configured),
         updatedAt: (r.updated_at as string | null) ?? null,
         rules: rules.map((entry: unknown) => {
@@ -493,6 +502,85 @@ export function useTenantAuthPolicy(tenantId: string) {
           };
         }),
       } as TenantAuthPolicy;
+    },
+  });
+}
+
+/** Turn one sign-in method on or off for one kind of person. */
+export function useSetAuthMethod(tenantId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      methodKey: string;
+      subjectKind: string;
+      enabled: boolean;
+      surface?: string;
+    }) =>
+      api.patch(`/api/platform/tenants/${tenantId}/auth-policy/methods`, {
+        method_key: input.methodKey,
+        subject_kind: input.subjectKind,
+        enabled: input.enabled,
+        surface: input.surface ?? "any",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TENANT_AUTH_POLICY_KEY(tenantId) });
+    },
+  });
+}
+
+/** The settings that are not methods: family access, the credential policy,
+ *  and which wire carries a sign-in code. */
+export function useUpdateAuthPolicy(tenantId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      familyAccessMode?: string;
+      studentCredentialPolicy?: string;
+      otpDeliveryChannel?: string;
+    }) =>
+      api.patch(`/api/platform/tenants/${tenantId}/auth-policy`, {
+        family_access_mode: input.familyAccessMode,
+        student_credential_policy: input.studentCredentialPolicy,
+        otp_delivery_channel: input.otpDeliveryChannel,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TENANT_AUTH_POLICY_KEY(tenantId) });
+    },
+  });
+}
+
+/** A school's configured integrations, with a no-send readiness report for
+ *  each. Minimal read-only shape for the login-access card's readiness
+ *  banner; Task 14 builds the full integrations section on top of this. */
+export function useTenantIntegrations(tenantId: string) {
+  return useQuery({
+    queryKey: TENANT_INTEGRATIONS_KEY(tenantId),
+    enabled: Boolean(tenantId),
+    staleTime: STALE_TIME,
+    queryFn: async () => {
+      const res = await api.get<{ data?: unknown }>(
+        `/api/platform/tenants/${tenantId}/integrations`
+      );
+      const r = (res?.data ?? {}) as Record<string, unknown>;
+      const integrations = Array.isArray(r.integrations) ? r.integrations : [];
+      return integrations.map((entry: unknown) => {
+        const integration = entry as Record<string, unknown>;
+        const health = (integration.health ?? {}) as Record<string, unknown>;
+        return {
+          id: String(integration.id ?? ""),
+          capability: String(integration.capability ?? ""),
+          providerKey: String(integration.provider_key ?? ""),
+          status: String(integration.status ?? ""),
+          health: {
+            ready: Boolean(health.ready),
+            configured: Boolean(health.configured),
+            credentialsPresent: Boolean(health.credentials_present),
+            providerSupported: Boolean(health.provider_supported),
+            providerReachable: (health.provider_reachable as boolean | null) ?? null,
+            detail: (health.detail as string | null) ?? null,
+          },
+        };
+      }) as TenantIntegration[];
     },
   });
 }

@@ -1,9 +1,23 @@
 "use client";
 
-import { KeyRound } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, KeyRound } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTenantAuthPolicy } from "@/hooks/useApi";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { getErrorMessage } from "@/lib/api";
+import {
+  useSetAuthMethod,
+  useTenantAuthPolicy,
+  useTenantIntegrations,
+  useUpdateAuthPolicy,
+} from "@/hooks/useApi";
 import type { AuthPolicyRule } from "@/types";
 
 /** The people a rule can be about, in the order a school thinks of them. */
@@ -36,6 +50,16 @@ const CREDENTIAL_POLICY_LABELS: Record<string, string> = {
   no_forced_change: "May be kept as issued",
 };
 
+const OTP_CHANNEL_LABELS: Record<string, string> = {
+  sms: "SMS",
+  whatsapp: "WhatsApp",
+};
+
+/** Methods that cost money to attempt (`is_paid` on the server's strategy
+ *  registry). Only `mobile_otp` today, but read from a list here so a future
+ *  paid method needs one addition, not a new code path. */
+const PAID_METHOD_KEYS = ["mobile_otp"];
+
 function methodLabel(key: string): string {
   return METHOD_LABELS[key] ?? key.replace(/_/g, " ");
 }
@@ -44,19 +68,76 @@ function surfaceLabel(surface: string): string | null {
   return surface === "any" ? null : surface;
 }
 
+function channelLabel(channel: string): string {
+  return OTP_CHANNEL_LABELS[channel] ?? channel;
+}
+
 /**
- * Which ways in this school allows.
- *
- * Read-only, deliberately. The policy is configuration that nothing consults
- * yet, and an operator who could switch a method off here before the
- * authentication pipeline reads it would be setting a trap for themselves.
- * Editing arrives with the phase that gives the policy authority.
+ * Which ways in this school allows — and, from this phase on, the controls
+ * that change it. Switching a method on or off, or changing family access,
+ * the student credential policy, or the OTP channel, now calls the platform
+ * API directly; there is no longer a Python shell in the loop.
  */
 export function LoginAccessSection({ tenantId }: { tenantId: string }) {
   const { data: policy, isLoading, error } = useTenantAuthPolicy(tenantId);
+  const { data: integrations } = useTenantIntegrations(tenantId);
+  const setMethod = useSetAuthMethod(tenantId);
+  const updatePolicy = useUpdateAuthPolicy(tenantId);
 
+  const rules = policy?.rules ?? [];
   const rulesFor = (subjectKind: string): AuthPolicyRule[] =>
-    (policy?.rules ?? []).filter((rule) => rule.subjectKind === subjectKind);
+    rules.filter((rule) => rule.subjectKind === subjectKind);
+
+  async function handleToggleMethod(rule: AuthPolicyRule, enabled: boolean) {
+    try {
+      await setMethod.mutateAsync({
+        methodKey: rule.methodKey,
+        subjectKind: rule.subjectKind,
+        enabled,
+        surface: rule.surface,
+      });
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  }
+
+  async function handleFamilyAccessChange(value: string) {
+    try {
+      await updatePolicy.mutateAsync({ familyAccessMode: value });
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  }
+
+  async function handleCredentialPolicyChange(value: string) {
+    try {
+      await updatePolicy.mutateAsync({ studentCredentialPolicy: value });
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  }
+
+  async function handleOtpChannelChange(value: string) {
+    try {
+      await updatePolicy.mutateAsync({ otpDeliveryChannel: value });
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    }
+  }
+
+  const mobileOtpEnabledAnywhere = rules.some(
+    (rule) => rule.methodKey === "mobile_otp" && rule.isEnabled
+  );
+
+  const paidMethodEnabled = rules.some(
+    (rule) => PAID_METHOD_KEYS.includes(rule.methodKey) && rule.isEnabled
+  );
+  const channel = policy?.otpDeliveryChannel || "sms";
+  const channelIntegration = (integrations ?? []).find(
+    (integration) => integration.capability === channel
+  );
+  const channelReady = Boolean(channelIntegration?.health.ready);
+  const showReadinessWarning = paidMethodEnabled && !channelReady;
 
   return (
     <Card className="mt-6 rounded-xl">
@@ -86,24 +167,47 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
               </p>
             )}
 
+            {showReadinessWarning && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p>
+                  No working {channelLabel(channel)} provider is configured for
+                  this school&apos;s chosen OTP channel. A method that sends a
+                  message will fail silently until one is. Configure one in the{" "}
+                  <a href="#integrations" className="underline underline-offset-2">
+                    Integrations
+                  </a>{" "}
+                  section below.
+                </p>
+              </div>
+            )}
+
             <div className="grid gap-6 sm:grid-cols-3">
               {SUBJECT_KINDS.map(({ key, label, hint }) => {
-                const rules = rulesFor(key);
+                const subjectRules = rulesFor(key);
                 return (
                   <div key={key}>
                     <p className="text-sm font-medium">{label}</p>
                     <p className="mb-2 text-xs text-muted-foreground">{hint}</p>
-                    {rules.length === 0 ? (
+                    {subjectRules.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No sign-in method
                       </p>
                     ) : (
-                      <ul className="space-y-1.5">
-                        {rules.map((rule) => (
+                      <ul className="space-y-2.5">
+                        {subjectRules.map((rule) => (
                           <li
                             key={`${rule.subjectKind}-${rule.surface}-${rule.methodKey}`}
                             className="flex flex-wrap items-center gap-2"
                           >
+                            <Switch
+                              checked={rule.isEnabled}
+                              disabled={setMethod.isPending}
+                              aria-label={methodLabel(rule.methodKey)}
+                              onCheckedChange={(checked) =>
+                                handleToggleMethod(rule, checked)
+                              }
+                            />
                             <span className="text-sm">
                               {methodLabel(rule.methodKey)}
                             </span>
@@ -112,11 +216,6 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
                                 {surfaceLabel(rule.surface)}
                               </span>
                             )}
-                            <Badge
-                              variant={rule.isEnabled ? "default" : "secondary"}
-                            >
-                              {rule.isEnabled ? "Enabled" : "Disabled"}
-                            </Badge>
                           </li>
                         ))}
                       </ul>
@@ -126,30 +225,71 @@ export function LoginAccessSection({ tenantId }: { tenantId: string }) {
               })}
             </div>
 
-            <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
-              <div>
+            <div className="grid gap-4 border-t pt-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Family access</p>
-                <p className="text-sm">
-                  {FAMILY_ACCESS_LABELS[policy.familyAccessMode] ??
-                    policy.familyAccessMode}
-                </p>
+                <Select
+                  value={policy.familyAccessMode}
+                  onValueChange={handleFamilyAccessChange}
+                  disabled={updatePolicy.isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(FAMILY_ACCESS_LABELS).map(([value, text]) => (
+                      <SelectItem key={value} value={value}>
+                        {text}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
                   School-issued student password
                 </p>
-                <p className="text-sm">
-                  {CREDENTIAL_POLICY_LABELS[policy.studentCredentialPolicy] ??
-                    policy.studentCredentialPolicy}
-                </p>
+                <Select
+                  value={policy.studentCredentialPolicy}
+                  onValueChange={handleCredentialPolicyChange}
+                  disabled={updatePolicy.isPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CREDENTIAL_POLICY_LABELS).map(([value, text]) => (
+                      <SelectItem key={value} value={value}>
+                        {text}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              {mobileOtpEnabledAnywhere && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    OTP delivery channel
+                  </p>
+                  <Select
+                    value={policy.otpDeliveryChannel}
+                    onValueChange={handleOtpChannelChange}
+                    disabled={updatePolicy.isPending}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(OTP_CHANNEL_LABELS).map(([value, text]) => (
+                        <SelectItem key={value} value={value}>
+                          {text}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              Read-only. Sign-in still uses email and password for everyone;
-              this policy is recorded for the authentication work in progress
-              and does not yet control who may sign in.
-            </p>
           </div>
         )}
       </CardContent>

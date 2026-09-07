@@ -175,7 +175,8 @@ export interface LoginResponse {
 }
 
 /** One permission in a school's authentication policy: this kind of person, on
- *  this surface, may use this method. Read-only in the panel. */
+ *  this surface, may use this method. Writable from the panel via
+ *  `useSetAuthMethod`. */
 export type AuthPolicyRule = {
   subjectKind: string;
   surface: string;
@@ -185,13 +186,36 @@ export type AuthPolicyRule = {
   notes: string | null;
 };
 
-/** Which ways in a school allows. Configuration; it does not yet govern
- *  sign-in. */
+/** Which ways in a school allows, and its family-access, credential and OTP
+ *  channel settings. Writable from the panel via `useSetAuthMethod` and
+ *  `useUpdateAuthPolicy` — this is what governs who may sign in. */
 export type TenantAuthPolicy = {
   tenantId: string;
   familyAccessMode: string;
   studentCredentialPolicy: string;
+  otpDeliveryChannel: string;
   isConfigured: boolean;
   updatedAt: string | null;
   rules: AuthPolicyRule[];
+};
+
+/** A school's readiness report for one integration capability (e.g. "sms"),
+ *  without sending anything to produce it. Minimal read-only shape for the
+ *  readiness banner on the login-access card; Task 14 builds the full
+ *  integrations section on top of this same hook. */
+export type TenantIntegrationHealth = {
+  ready: boolean;
+  configured: boolean;
+  credentialsPresent: boolean;
+  providerSupported: boolean;
+  providerReachable: boolean | null;
+  detail: string | null;
+};
+
+export type TenantIntegration = {
+  id: string;
+  capability: string;
+  providerKey: string;
+  status: string;
+  health: TenantIntegrationHealth;
 };
