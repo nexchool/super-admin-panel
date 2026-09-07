@@ -173,3 +173,25 @@ export interface LoginResponse {
   success: boolean;
   user?: { email: string; name?: string };
 }
+
+/** One permission in a school's authentication policy: this kind of person, on
+ *  this surface, may use this method. Read-only in the panel. */
+export type AuthPolicyRule = {
+  subjectKind: string;
+  surface: string;
+  methodKey: string;
+  isEnabled: boolean;
+  enabledAt: string | null;
+  notes: string | null;
+};
+
+/** Which ways in a school allows. Configuration; it does not yet govern
+ *  sign-in. */
+export type TenantAuthPolicy = {
+  tenantId: string;
+  familyAccessMode: string;
+  studentCredentialPolicy: string;
+  isConfigured: boolean;
+  updatedAt: string | null;
+  rules: AuthPolicyRule[];
+};

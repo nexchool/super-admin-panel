@@ -9,6 +9,7 @@ import type {
   FeatureCatalogItem,
   TenantBilling,
   ThemeSeeds,
+  TenantAuthPolicy,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
@@ -17,6 +18,12 @@ const TENANTS_KEY = (page: number, limit: number, search: string) =>
 const TENANT_KEY = (id: string) => ["platform", "tenant", id];
 const FEATURE_CATALOG_KEY = ["platform", "feature-catalog"];
 const TENANT_BILLING_KEY = (tenantId: string) => ["platform", "tenant", tenantId, "billing"];
+const TENANT_AUTH_POLICY_KEY = (tenantId: string) => [
+  "platform",
+  "tenant",
+  tenantId,
+  "auth-policy",
+];
 
 const STALE_TIME = 2 * 60 * 1000;
 
@@ -453,4 +460,39 @@ export function useInvalidateTenantAdmins(tenantId: string | null) {
   const queryClient = useQueryClient();
   return () =>
     queryClient.invalidateQueries({ queryKey: TENANT_ADMINS_KEY(tenantId ?? "") });
+}
+
+/** A school's authentication policy. Read-only: there is no mutation endpoint
+ *  for it yet, deliberately — the policy is recorded before it is enforced. */
+export function useTenantAuthPolicy(tenantId: string) {
+  return useQuery({
+    queryKey: TENANT_AUTH_POLICY_KEY(tenantId),
+    enabled: Boolean(tenantId),
+    staleTime: STALE_TIME,
+    queryFn: async () => {
+      const res = await api.get<{ data?: unknown }>(
+        `/api/platform/tenants/${tenantId}/auth-policy`
+      );
+      const r = (res?.data ?? {}) as Record<string, unknown>;
+      const rules = Array.isArray(r.rules) ? r.rules : [];
+      return {
+        tenantId: String(r.tenant_id ?? tenantId),
+        familyAccessMode: String(r.family_access_mode ?? ""),
+        studentCredentialPolicy: String(r.student_credential_policy ?? ""),
+        isConfigured: Boolean(r.is_configured),
+        updatedAt: (r.updated_at as string | null) ?? null,
+        rules: rules.map((entry: unknown) => {
+          const rule = entry as Record<string, unknown>;
+          return {
+            subjectKind: String(rule.subject_kind ?? ""),
+            surface: String(rule.surface ?? ""),
+            methodKey: String(rule.method_key ?? ""),
+            isEnabled: Boolean(rule.is_enabled),
+            enabledAt: (rule.enabled_at as string | null) ?? null,
+            notes: (rule.notes as string | null) ?? null,
+          };
+        }),
+      } as TenantAuthPolicy;
+    },
+  });
 }

@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import { OnboardingSection } from "./onboarding-section";
 import { ThemeSection } from "./theme-section";
+import { LoginAccessSection } from "./login-access-section";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -591,6 +592,8 @@ export function TenantDetailView({ id }: { id: string }) {
         defaultSeeds={tenant.themeDefaultSeeds}
         onSaved={invalidateTenant}
       />
+
+      <LoginAccessSection tenantId={id} />
 
       <Card className="mt-6 rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between">

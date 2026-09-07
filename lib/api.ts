@@ -115,6 +115,10 @@ export async function apiRequest<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
+  // Which application is calling. Telemetry and product policy, never a
+  // security boundary — an absent header is recorded as "unknown".
+  headers["X-Client-Surface"] = "panel";
+
   let res: Response;
   try {
     res = await fetch(fullUrl, {
@@ -122,6 +126,29 @@ export async function apiRequest<T>(
       credentials: "include",
       headers,
     });
+
+    // An expired access token is ordinary, not a rejected identity: the
+    // panel's access token lives fifteen minutes and an operator's afternoon
+    // does not. Renew once — on the shared promise, so a screenful of
+    // parallel requests spends the refresh token exactly once — and send the
+    // request again with the new token. A second refusal is a real one and
+    // falls through to the sign-out below.
+    if (
+      res.status === 401 &&
+      typeof window !== "undefined" &&
+      !isPublicAuthRequestUrl(fullUrl)
+    ) {
+      const { refreshSession } = await import("./sessionRefresh");
+      if (await refreshSession()) {
+        const renewed = getAuthToken();
+        if (renewed) headers["Authorization"] = `Bearer ${renewed}`;
+        res = await fetch(fullUrl, {
+          ...options,
+          credentials: "include",
+          headers,
+        });
+      }
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const network =
