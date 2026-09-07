@@ -226,7 +226,11 @@ export type TenantIntegration = {
  *  so a method with no rule yet still gets a switch, defaulted off, instead
  *  of disappearing. `isPaid` is what tells the card a method needs a working
  *  messaging channel; it replaces a hardcoded list of paid method keys that
- *  would otherwise go stale the moment a second paid method ships. */
+ *  would otherwise go stale the moment a second paid method ships.
+ *  `subjectKinds` is the same move for who a method can ever serve: `mobile_pin`
+ *  is students-only, and the card reads this to skip rendering a switch that
+ *  would report success and never actually let anyone in, instead of
+ *  offering every method under every column. */
 export type AuthMethodCatalogEntry = {
   key: string;
   identifierType: string;
@@ -234,4 +238,5 @@ export type AuthMethodCatalogEntry = {
   requiresTenant: boolean;
   isPaid: boolean;
   countsTowardAccountLockout: boolean;
+  subjectKinds: string[];
 };

@@ -71,31 +71,36 @@ function channelLabel(channel: string): string {
 /** One row the card renders: always the catalog's shape, with state read
  *  from a matching rule when one exists.
  *
- *  Nothing here declares which subject kinds a method applies to — the
- *  strategy registry this catalog comes from doesn't declare that either
- *  (see `modules/auth/strategies/base.py`), so every method is offered to
- *  every subject kind rather than guessing at a restriction nobody wrote
- *  down. */
+ *  Filtered to the methods that can actually serve this subject kind.
+ *  `mobile_pin` declares `subjectKinds: ["student"]`
+ *  (`modules/auth/strategies/mobile_pin.py`'s "Students only.") — offering
+ *  it under Staff or Parents would render a switch that flips on, reports
+ *  success, and never lets anyone through, which is exactly the failure
+ *  this catalog exists to prevent for a paid method with no working
+ *  channel. A method with no restriction lists every kind, so this changes
+ *  nothing for `email_password` or any method that has not narrowed itself. */
 function mergeMethodsForSubject(
   subjectKind: string,
   catalog: AuthMethodCatalogEntry[],
   rules: AuthPolicyRule[]
 ): AuthPolicyRule[] {
-  return catalog.map((method) => {
-    const existing = rules.find(
-      (rule) => rule.subjectKind === subjectKind && rule.methodKey === method.key
-    );
-    return (
-      existing ?? {
-        subjectKind,
-        surface: "any",
-        methodKey: method.key,
-        isEnabled: false,
-        enabledAt: null,
-        notes: null,
-      }
-    );
-  });
+  return catalog
+    .filter((method) => method.subjectKinds.includes(subjectKind))
+    .map((method) => {
+      const existing = rules.find(
+        (rule) => rule.subjectKind === subjectKind && rule.methodKey === method.key
+      );
+      return (
+        existing ?? {
+          subjectKind,
+          surface: "any",
+          methodKey: method.key,
+          isEnabled: false,
+          enabledAt: null,
+          notes: null,
+        }
+      );
+    });
 }
 
 /**

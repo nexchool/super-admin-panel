@@ -78,6 +78,8 @@ function policy(rules: AuthPolicyRule[]): TenantAuthPolicy {
   };
 }
 
+const EVERY_SUBJECT_KIND = ["student", "staff", "parent"];
+
 function authMethod(overrides: Partial<AuthMethodCatalogEntry> = {}): AuthMethodCatalogEntry {
   return {
     key: "email_password",
@@ -86,6 +88,7 @@ function authMethod(overrides: Partial<AuthMethodCatalogEntry> = {}): AuthMethod
     requiresTenant: false,
     isPaid: false,
     countsTowardAccountLockout: true,
+    subjectKinds: EVERY_SUBJECT_KIND,
     ...overrides,
   };
 }
@@ -111,6 +114,9 @@ const CATALOG: AuthMethodCatalogEntry[] = [
     credentialType: "pin",
     requiresTenant: true,
     countsTowardAccountLockout: false,
+    // Students only — see `modules/auth/strategies/mobile_pin.py`'s
+    // docstring. The card must not render this under Staff or Parents.
+    subjectKinds: ["student"],
   }),
 ];
 
@@ -196,6 +202,26 @@ describe("LoginAccessSection", () => {
       enabled: true,
       surface: "any",
     });
+  });
+
+  it("renders a Mobile PIN switch under Students but not under Staff or Parents", async () => {
+    // `mobile_pin` declares `subjectKinds: ["student"]` in the catalog fixture
+    // above — the same restriction the strategy itself enforces
+    // (`modules/auth/strategies/mobile_pin.py`). Offering it under Staff or
+    // Parents would render a switch that reports success and never lets
+    // anyone in, which is the bug this task fixes.
+    const { LoginAccessSection } = await import("./login-access-section");
+    render(<LoginAccessSection tenantId="t1" />);
+
+    expect(
+      screen.getByRole("switch", { name: /mobile number \+ pin.*students/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: /mobile number \+ pin.*staff/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: /mobile number \+ pin.*parents/i })
+    ).not.toBeInTheDocument();
   });
 
   it("falls back to a readable label for a catalog method with no entry in METHOD_LABELS", async () => {

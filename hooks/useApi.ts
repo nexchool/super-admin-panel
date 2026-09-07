@@ -81,6 +81,9 @@ export function useAuthMethods() {
           requiresTenant: Boolean(m.requires_tenant),
           isPaid: Boolean(m.is_paid),
           countsTowardAccountLockout: Boolean(m.counts_toward_account_lockout),
+          subjectKinds: Array.isArray(m.subject_kinds)
+            ? (m.subject_kinds as unknown[]).map(String)
+            : [],
         };
       }) as AuthMethodCatalogEntry[];
     },
