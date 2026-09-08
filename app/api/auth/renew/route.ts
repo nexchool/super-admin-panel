@@ -15,7 +15,19 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ACCESS_COOKIE_SECONDS = 20 * 60;
-const REFRESH_COOKIE_SECONDS = 30 * 24 * 60 * 60;
+/**
+ * The panel's own session ceiling — twelve hours, not the thirty days this
+ * used to be.
+ *
+ * An operator here can enter any school on the system, so the API gives the
+ * `panel` surface its own session lifetime: thirty minutes idle, twelve hours
+ * absolute (`server/modules/auth/session_policy.py`). A cookie outliving that
+ * would not extend anything — the API is the authority and refuses on its own
+ * clock — it would just leave a browser holding a credential that stopped
+ * working hours ago, and an operator staring at a signed-in shell where
+ * nothing loads. The cookie is kept honest about the session behind it.
+ */
+const REFRESH_COOKIE_SECONDS = 12 * 60 * 60;
 
 function apiBase(): string {
   const isDev = process.env.NODE_ENV === "development";
