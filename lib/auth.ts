@@ -14,7 +14,7 @@ const AUTH_ME_PATH = "/api/auth/profile";
 /** Backend login response shape (data.access_token) */
 interface LoginApiResponse {
   success?: boolean;
-  data?: { access_token?: string };
+  data?: { access_token?: string; refresh_token?: string };
 }
 
 export async function login(payload: LoginPayload): Promise<LoginResponse & LoginApiResponse> {
@@ -22,12 +22,23 @@ export async function login(payload: LoginPayload): Promise<LoginResponse & Logi
   return res;
 }
 
-/** Sets panel-domain cookie so middleware sees auth (required when panel and API are cross-origin) */
-export async function setPanelAuthCookie(accessToken: string): Promise<void> {
+/** Sets panel-domain cookies so middleware sees auth (required when panel and
+ *  API are cross-origin).
+ *
+ *  The refresh token is passed too, and is what makes a session outlast the
+ *  fifteen minutes an access token lives. Without it an operator was signed
+ *  out mid-task with nothing able to renew them. */
+export async function setPanelAuthCookie(
+  accessToken: string,
+  refreshToken?: string
+): Promise<void> {
   await fetch("/api/auth/set-cookie", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ access_token: accessToken }),
+    body: JSON.stringify({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }),
     credentials: "include",
   });
 }

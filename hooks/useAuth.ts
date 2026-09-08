@@ -40,7 +40,7 @@ export function useAuth() {
       if (!token) {
         return;
       }
-      await setPanelAuthCookie(token);
+      await setPanelAuthCookie(token, data?.data?.refresh_token);
       queryClient.invalidateQueries({ queryKey: ["session"] });
       // Full page nav ensures cookie is sent and avoids RSC/prefetch issues
       window.location.href = "/dashboard";

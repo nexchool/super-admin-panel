@@ -9,6 +9,7 @@ import {
   LogOut,
   FileText,
   Mail,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/tenants", label: "Tenants", icon: Building2 },
+  { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
   { href: "/dashboard/notification-templates", label: "Notification templates", icon: Mail },
   { href: "/dashboard/audit", label: "Audit logs", icon: FileText },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
