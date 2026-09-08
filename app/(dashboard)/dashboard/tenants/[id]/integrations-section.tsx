@@ -55,13 +55,16 @@ const SETTINGS_FIELDS: Record<
   ],
 };
 
-/** Purposes this build actually looks a template up for — `authentication_otp`
- *  (mobile OTP sign-in) and `integration_test` (the button below). An
- *  operator may still type a different purpose; these are suggestions, not
- *  the only valid values, since `templates.py` accepts any string key. */
+/** Purposes this build actually looks a template up for. `integration_test`
+ *  is deliberately not one of these: the test-send button below resolves the
+ *  school's own `authentication_otp` template instead (with a placeholder
+ *  code), because nobody registers a template for a purpose that exists only
+ *  to be tested — on a DLT-regulated vendor an operator would have to file a
+ *  separate registration purely to make the button work. An operator may
+ *  still type a different purpose here; these are suggestions, not the only
+ *  valid values, since `templates.py` accepts any string key. */
 const KNOWN_TEMPLATE_PURPOSES = [
   { value: "authentication_otp", label: "Sign-in code (OTP)" },
-  { value: "integration_test", label: "Test message" },
 ];
 
 type TemplateRow = { purpose: string; id: string; variables: string };
@@ -401,8 +404,8 @@ function CapabilityPanel({
             </div>
             {templateRows.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No templates registered yet. Sign-in codes and the test message
-                below both need one.
+                No templates registered yet. Sign-in codes need one, and the
+                test message below sends through that same template.
               </p>
             )}
             <p className="text-xs text-muted-foreground">
@@ -578,8 +581,10 @@ function TestSendControl({
       </p>
       <p className="text-xs text-muted-foreground">
         This sends a real, billable {label} message to the number below right
-        now — it is not a connection check, and it will ring that phone.
-        Limited to 5 sends per hour.
+        now, using this school&apos;s own sign-in (OTP) template with a
+        placeholder code — so a success here means a real sign-in code will
+        go through too. It is not a connection check, and it will ring that
+        phone. Limited to 5 sends per hour.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Input
