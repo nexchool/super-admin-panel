@@ -35,6 +35,12 @@ export interface TenantListItem {
   discountPercentage: number | null;
   studentsCount: number;
   teachersCount: number;
+  /** Students being taught and teachers employed — what the seat limits are measured against. */
+  activeStudentsCount: number;
+  employedTeachersCount: number;
+  /** Seat limits; null means no ceiling. */
+  maxActiveStudents: number | null;
+  maxEmployedTeachers: number | null;
   status: TenantStatus;
 }
 
@@ -67,11 +73,50 @@ export interface TenantDetail {
   discountEndDate: string | null;
   trialEndsAt: string | null;
   billingCycle: string;
+  /** Students being taught and teachers employed — what the seat limits are measured against. */
+  activeStudentsCount: number;
+  employedTeachersCount: number;
+  /** Seat limits; null means no ceiling. */
+  maxActiveStudents: number | null;
+  maxEmployedTeachers: number | null;
+  /** The subscription term (ADR-023). Null due date = no term, never suspended by it. */
+  subscriptionStartsOn: string | null;
+  subscriptionDueOn: string | null;
+  graceDays: number;
+  autoSuspendAfterGrace: boolean;
+  term: SubscriptionTerm;
   featureFlags: Record<string, boolean>;
   /** The school's brand colours; null until somebody sets a theme. */
   themeSeeds: ThemeSeeds | null;
   /** What the app ships with — shown as the starting point when unthemed. */
   themeDefaultSeeds: ThemeSeeds;
+}
+
+export type TermStanding = "no_term" | "current" | "payment_due" | "grace_expired";
+
+/** Where a school stands in its term, derived on the server. */
+export interface SubscriptionTerm {
+  standing: TermStanding;
+  graceEndsOn: string | null;
+  daysUntilDue: number | null;
+}
+
+export type PaymentMethod = "bank_transfer" | "upi" | "cheque" | "cash" | "other";
+
+/** One payment a school made, as the operator recorded it. */
+export interface SubscriptionPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  paidOn: string;
+  method: PaymentMethod;
+  reference: string | null;
+  coversFrom: string | null;
+  coversTo: string | null;
+  note: string | null;
+  recordedBy: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
 }
 
 /**
@@ -121,6 +166,8 @@ export interface CreateTenantPayload {
   discountPercentage?: number;
   discountStartDate?: string;
   discountEndDate?: string;
+  maxActiveStudents?: number;
+  maxEmployedTeachers?: number;
   featureFlags?: Record<string, boolean>;
 }
 

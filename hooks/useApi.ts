@@ -3,17 +3,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "@/lib/api";
 import type {
-  DashboardResponse,
-  PaginatedTenantsResponse,
-  TenantDetail,
-  FeatureCatalogItem,
-  TenantBilling,
-  ThemeSeeds,
-  TenantAuthPolicy,
-  TenantIntegration,
   AuthMethodCatalogEntry,
+  DashboardResponse,
+  FeatureCatalogItem,
   IntegrationCapability,
   IntegrationOutboxMessage,
+  PaginatedTenantsResponse,
+  SubscriptionPayment,
+  SubscriptionTerm,
+  TenantAuthPolicy,
+  TenantBilling,
+  TenantDetail,
+  TenantIntegration,
+  ThemeSeeds,
 } from "@/types";
 
 const DASHBOARD_KEY = ["platform", "dashboard"];
@@ -158,6 +160,11 @@ export function useTenants(page: number, limit: number, search = "") {
             r.discount_percentage != null ? Number(r.discount_percentage) : null,
           studentsCount: Number(r.student_count ?? r.studentsCount ?? 0),
           teachersCount: Number(r.teacher_count ?? r.teachersCount ?? 0),
+          activeStudentsCount: Number(r.active_student_count ?? 0),
+          employedTeachersCount: Number(r.employed_teacher_count ?? 0),
+          maxActiveStudents: r.max_active_students != null ? Number(r.max_active_students) : null,
+          maxEmployedTeachers:
+            r.max_employed_teachers != null ? Number(r.max_employed_teachers) : null,
           status: (r.status as "active" | "suspended") || "active",
         };
       });
@@ -168,6 +175,99 @@ export function useTenants(page: number, limit: number, search = "") {
         limit: pagination.per_page ?? limit,
         totalPages: pagination.pages ?? 0,
       } as PaginatedTenantsResponse;
+    },
+  });
+}
+
+/** Read the server's derived term standing; a missing block means no term. */
+function readTerm(raw: unknown): SubscriptionTerm {
+  const t = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const standing = (
+    ["no_term", "current", "payment_due", "grace_expired"].includes(String(t.standing))
+      ? String(t.standing)
+      : "no_term"
+  ) as SubscriptionTerm["standing"];
+  return {
+    standing,
+    graceEndsOn: typeof t.grace_ends_on === "string" ? t.grace_ends_on : null,
+    daysUntilDue: t.days_until_due != null ? Number(t.days_until_due) : null,
+  };
+}
+
+function readPayment(raw: unknown): SubscriptionPayment {
+  const p = raw as Record<string, unknown>;
+  return {
+    id: String(p.id ?? ""),
+    amount: Number(p.amount ?? 0),
+    currency: typeof p.currency === "string" ? p.currency : "INR",
+    paidOn: String(p.paid_on ?? ""),
+    method: (p.method as SubscriptionPayment["method"]) ?? "other",
+    reference: typeof p.reference === "string" ? p.reference : null,
+    coversFrom: typeof p.covers_from === "string" ? p.covers_from : null,
+    coversTo: typeof p.covers_to === "string" ? p.covers_to : null,
+    note: typeof p.note === "string" ? p.note : null,
+    recordedBy: typeof p.recorded_by === "string" ? p.recorded_by : null,
+    voidedAt: typeof p.voided_at === "string" ? p.voided_at : null,
+    voidReason: typeof p.void_reason === "string" ? p.void_reason : null,
+  };
+}
+
+const TENANT_PAYMENTS_KEY = (tenantId: string) => ["platform", "tenant", tenantId, "payments"];
+
+export function useTenantPayments(tenantId: string) {
+  return useQuery({
+    queryKey: TENANT_PAYMENTS_KEY(tenantId),
+    enabled: Boolean(tenantId),
+    staleTime: STALE_TIME,
+    queryFn: async () => {
+      const res = await api.get<{ data?: { payments?: unknown[] } }>(
+        `/api/platform/tenants/${tenantId}/payments`
+      );
+      const rows = Array.isArray(res?.data?.payments) ? res.data.payments : [];
+      return rows.map(readPayment);
+    },
+  });
+}
+
+export function useRecordPayment(tenantId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      amount: number;
+      paidOn: string;
+      method: string;
+      reference?: string;
+      coversFrom?: string;
+      coversTo?: string;
+      note?: string;
+      nextDueOn?: string;
+    }) =>
+      api.post(`/api/platform/tenants/${tenantId}/payments`, {
+        amount: input.amount,
+        paid_on: input.paidOn,
+        method: input.method,
+        reference: input.reference || undefined,
+        covers_from: input.coversFrom || undefined,
+        covers_to: input.coversTo || undefined,
+        note: input.note || undefined,
+        next_due_on: input.nextDueOn || undefined,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: TENANT_PAYMENTS_KEY(tenantId) });
+      await queryClient.invalidateQueries({ queryKey: TENANT_KEY(tenantId) });
+    },
+  });
+}
+
+export function useVoidPayment(tenantId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { paymentId: string; reason: string }) =>
+      api.post(`/api/platform/tenants/${tenantId}/payments/${input.paymentId}/void`, {
+        reason: input.reason,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: TENANT_PAYMENTS_KEY(tenantId) });
     },
   });
 }
@@ -214,6 +314,18 @@ export function useTenant(id: string | null) {
         status,
         studentsCount: Number(r.student_count ?? r.studentsCount ?? 0),
         teachersCount: Number(r.teacher_count ?? r.teachersCount ?? 0),
+        activeStudentsCount: Number(r.active_student_count ?? 0),
+        employedTeachersCount: Number(r.employed_teacher_count ?? 0),
+        maxActiveStudents: r.max_active_students != null ? Number(r.max_active_students) : null,
+        maxEmployedTeachers:
+          r.max_employed_teachers != null ? Number(r.max_employed_teachers) : null,
+        subscriptionStartsOn:
+          typeof r.subscription_starts_on === "string" ? r.subscription_starts_on : null,
+        subscriptionDueOn:
+          typeof r.subscription_due_on === "string" ? r.subscription_due_on : null,
+        graceDays: Number(r.grace_days ?? 7),
+        autoSuspendAfterGrace: r.auto_suspend_after_grace !== false,
+        term: readTerm(r.term),
         createdAt: typeof r.created_at === "string" ? r.created_at : "",
         pricePerStudentPerYear:
           r.price_per_student_per_year != null ? Number(r.price_per_student_per_year) : null,

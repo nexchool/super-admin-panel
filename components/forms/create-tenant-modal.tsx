@@ -58,6 +58,8 @@ export function CreateTenantModal({
       discountPercentage: "",
       discountStartDate: "",
       discountEndDate: "",
+      maxActiveStudents: "",
+      maxEmployedTeachers: "",
       featureFlags: {},
     },
   });
@@ -90,6 +92,10 @@ export function CreateTenantModal({
       }
       if (values.discountStartDate) payload.discount_start_date = values.discountStartDate;
       if (values.discountEndDate) payload.discount_end_date = values.discountEndDate;
+      if (values.maxActiveStudents) payload.max_active_students = Number(values.maxActiveStudents);
+      if (values.maxEmployedTeachers) {
+        payload.max_employed_teachers = Number(values.maxEmployedTeachers);
+      }
       if (values.featureFlags && Object.keys(values.featureFlags).length > 0) {
         payload.feature_flags = values.featureFlags;
       }
@@ -196,6 +202,45 @@ export function CreateTenantModal({
               <div className="space-y-2">
                 <Label htmlFor="discountEndDate">Discount end</Label>
                 <Input id="discountEndDate" type="date" {...form.register("discountEndDate")} />
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Seats</h3>
+            <p className="text-xs text-muted-foreground">
+              Ceilings on how many students the school may have on roll and how many
+              teachers it may employ. Leave blank for no limit. Billing always charges
+              for the actual active count.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="maxActiveStudents">Student seats</Label>
+                <Input
+                  id="maxActiveStudents"
+                  type="number"
+                  min="1"
+                  step="1"
+                  {...form.register("maxActiveStudents")}
+                  placeholder="No limit"
+                />
+                {form.formState.errors.maxActiveStudents && (
+                  <p className="text-sm text-destructive">{form.formState.errors.maxActiveStudents.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maxEmployedTeachers">Teacher seats</Label>
+                <Input
+                  id="maxEmployedTeachers"
+                  type="number"
+                  min="1"
+                  step="1"
+                  {...form.register("maxEmployedTeachers")}
+                  placeholder="No limit"
+                />
+                {form.formState.errors.maxEmployedTeachers && (
+                  <p className="text-sm text-destructive">{form.formState.errors.maxEmployedTeachers.message}</p>
+                )}
               </div>
             </div>
           </section>
