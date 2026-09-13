@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Eye, Pause, Play, KeyRound, ExternalLink } from "lucide-react";
 import type { TenantListItem } from "@/types";
+import { SeatCount } from "@/components/tenants/seat-count";
 
 interface TenantsTableProps {
   data: TenantListItem[];
@@ -45,8 +46,8 @@ export function TenantsTable({
           <TableHead>Name</TableHead>
           <TableHead>Subdomain</TableHead>
           <TableHead className="text-right">Price / student / yr</TableHead>
-          <TableHead className="text-right">Students</TableHead>
-          <TableHead className="text-right">Teachers</TableHead>
+          <TableHead className="text-right">Active students</TableHead>
+          <TableHead className="text-right">Employed teachers</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="w-12" />
         </TableRow>
@@ -66,8 +67,12 @@ export function TenantsTable({
                 </span>
               )}
             </TableCell>
-            <TableCell className="text-right">{tenant.studentsCount}</TableCell>
-            <TableCell className="text-right">{tenant.teachersCount}</TableCell>
+            <TableCell className="text-right">
+              <SeatCount used={tenant.activeStudentsCount} limit={tenant.maxActiveStudents} />
+            </TableCell>
+            <TableCell className="text-right">
+              <SeatCount used={tenant.employedTeachersCount} limit={tenant.maxEmployedTeachers} />
+            </TableCell>
             <TableCell>
               <Badge
                 variant={

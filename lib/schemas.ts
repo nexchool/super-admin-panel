@@ -28,6 +28,15 @@ const optionalDate = z
     "Use YYYY-MM-DD"
   );
 
+/** A seat limit: blank means no ceiling; otherwise a whole number of at least 1. */
+const optionalSeatLimitString = z
+  .string()
+  .optional()
+  .refine(
+    (v) => !v || (/^\d+$/.test(v.trim()) && Number(v) >= 1),
+    "Leave blank for no limit, or enter a whole number of at least 1"
+  );
+
 const optionalDiscountString = z
   .string()
   .optional()
@@ -55,6 +64,8 @@ export const createTenantSchema = z.object({
   discountPercentage: optionalDiscountString,
   discountStartDate: optionalDate,
   discountEndDate: optionalDate,
+  maxActiveStudents: optionalSeatLimitString,
+  maxEmployedTeachers: optionalSeatLimitString,
   featureFlags: z.record(z.string(), z.boolean()).optional(),
 });
 
@@ -77,6 +88,8 @@ export const tenantPricingSchema = z
     discountPercentage: optionalDiscountString,
     discountStartDate: optionalDate,
     discountEndDate: optionalDate,
+    maxActiveStudents: optionalSeatLimitString,
+    maxEmployedTeachers: optionalSeatLimitString,
   })
   .refine(
     (data) => {

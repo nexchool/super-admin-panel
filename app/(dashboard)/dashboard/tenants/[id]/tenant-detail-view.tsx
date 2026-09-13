@@ -55,6 +55,9 @@ import {
   MoreHorizontal,
   ExternalLink,
 } from "lucide-react";
+import { SeatCount } from "@/components/tenants/seat-count";
+import { PaymentsSection } from "./payments-section";
+import { SubscriptionSection } from "./subscription-section";
 import { OnboardingSection } from "./onboarding-section";
 import { ThemeSection } from "./theme-section";
 import { LoginAccessSection } from "./login-access-section";
@@ -120,6 +123,8 @@ export function TenantDetailView({ id }: { id: string }) {
       discountPercentage: "",
       discountStartDate: "",
       discountEndDate: "",
+      maxActiveStudents: "",
+      maxEmployedTeachers: "",
     },
   });
 
@@ -132,6 +137,9 @@ export function TenantDetailView({ id }: { id: string }) {
           tenant.discountPercentage != null ? String(tenant.discountPercentage) : "",
         discountStartDate: tenant.discountStartDate ?? "",
         discountEndDate: tenant.discountEndDate ?? "",
+        maxActiveStudents: tenant.maxActiveStudents != null ? String(tenant.maxActiveStudents) : "",
+        maxEmployedTeachers:
+          tenant.maxEmployedTeachers != null ? String(tenant.maxEmployedTeachers) : "",
       });
     }
   }, [tenant, editPricingOpen, pricingForm]);
@@ -235,6 +243,9 @@ export function TenantDetailView({ id }: { id: string }) {
             : Number(values.discountPercentage),
         discount_start_date: values.discountStartDate ?? "",
         discount_end_date: values.discountEndDate ?? "",
+        // Blank means "no limit"; the server clears the column on "".
+        max_active_students: values.maxActiveStudents ? Number(values.maxActiveStudents) : "",
+        max_employed_teachers: values.maxEmployedTeachers ? Number(values.maxEmployedTeachers) : "",
       });
       toast.success("Pricing updated");
       setEditPricingOpen(false);
@@ -458,7 +469,7 @@ export function TenantDetailView({ id }: { id: string }) {
 
         <Card className="rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Pricing</CardTitle>
+            <CardTitle>Pricing &amp; seats</CardTitle>
             <Button variant="outline" size="sm" onClick={() => setEditPricingOpen(true)}>
               <Pencil className="mr-2 size-4" />
               Edit
@@ -489,6 +500,33 @@ export function TenantDetailView({ id }: { id: string }) {
                 </p>
               </div>
             )}
+            <div className="border-t pt-4">
+              <p className="text-sm text-muted-foreground">Student seats</p>
+              <div className="font-medium">
+                <SeatCount
+                  used={tenant.activeStudentsCount}
+                  limit={tenant.maxActiveStudents}
+                  noun="active students"
+                />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Teacher seats</p>
+              <div className="font-medium">
+                <SeatCount
+                  used={tenant.employedTeachersCount}
+                  limit={tenant.maxEmployedTeachers}
+                  noun="employed teachers"
+                />
+              </div>
+            </div>
+            {(tenant.maxActiveStudents != null && tenant.activeStudentsCount >= tenant.maxActiveStudents) ||
+            (tenant.maxEmployedTeachers != null && tenant.employedTeachersCount >= tenant.maxEmployedTeachers) ? (
+              <p className="text-xs text-muted-foreground">
+                The school cannot add more once a limit is reached. Raise the seats to let them
+                continue; billing charges for the actual active count either way.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -525,6 +563,17 @@ export function TenantDetailView({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <SubscriptionSection
+          tenant={tenant}
+          onChanged={async () => {
+            await invalidateTenant();
+            await invalidateTenants();
+          }}
+        />
+      </div>
+      <PaymentsSection tenant={tenant} />
 
       <Card className="mt-6 rounded-xl">
         <CardHeader>
@@ -762,7 +811,7 @@ export function TenantDetailView({ id }: { id: string }) {
       <Dialog open={editPricingOpen} onOpenChange={setEditPricingOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit pricing</DialogTitle>
+            <DialogTitle>Edit pricing &amp; seats</DialogTitle>
           </DialogHeader>
           <form onSubmit={pricingForm.handleSubmit(handleSavePricing)} className="space-y-4">
             <div className="space-y-2">
@@ -808,6 +857,42 @@ export function TenantDetailView({ id }: { id: string }) {
                   </p>
                 )}
               </div>
+            </div>
+            <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Student seats</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="No limit"
+                  {...pricingForm.register("maxActiveStudents")}
+                />
+                {pricingForm.formState.errors.maxActiveStudents && (
+                  <p className="text-sm text-destructive">
+                    {pricingForm.formState.errors.maxActiveStudents.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Teacher seats</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="No limit"
+                  {...pricingForm.register("maxEmployedTeachers")}
+                />
+                {pricingForm.formState.errors.maxEmployedTeachers && (
+                  <p className="text-sm text-destructive">
+                    {pricingForm.formState.errors.maxEmployedTeachers.message}
+                  </p>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Blank means no limit. Setting a limit below the current count stops new
+                admissions or hires until it is raised; existing records are untouched.
+              </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditPricingOpen(false)}>
