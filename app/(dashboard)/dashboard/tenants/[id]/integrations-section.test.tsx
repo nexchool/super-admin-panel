@@ -210,7 +210,7 @@ describe("IntegrationsSection", () => {
           tenantId: "t1",
           channel: "sms",
           destination: "+919876543210",
-          body: "This is a NexSchool test message. No action is needed.",
+          body: "This is a Nexchool test message. No action is needed.",
           purpose: "integration_test",
           sentAt: "2026-09-07T10:00:00Z",
         },
@@ -221,7 +221,7 @@ describe("IntegrationsSection", () => {
     render(<IntegrationsSection tenantId="t1" />);
 
     expect(screen.getByText(/outbox/i)).toBeInTheDocument();
-    expect(screen.getByText(/nexschool test message/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nexchool test message/i)).toBeInTheDocument();
   });
 
   it("shows the server's own refusal wording when saving a configuration is rejected", async () => {
